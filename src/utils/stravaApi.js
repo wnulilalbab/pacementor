@@ -150,6 +150,80 @@ export async function fetchActivitiesPage(page = 1, perPage = 100) {
     .map(toActivity);
 }
 
+// ── Fetch detailed streams for one activity and enrich it ────────────────────
+export async function fetchActivityStreams(stravaId, existingActivity) {
+  const streamTypes = 'latlng,altitude,heartrate,cadence,time,distance';
+  const data = await apiFetch(`/activities/${stravaId}/streams?keys=${streamTypes}&key_by_type=true`);
+
+  const latlng = data.latlng?.data || [];
+  const altitude = data.altitude?.data || [];
+  const heartrate = data.heartrate?.data || [];
+  const cadence = data.cadence?.data || [];
+  const time = data.time?.data || [];
+  const distance = data.distance?.data || [];
+
+  const trackPoints = latlng.map((ll, i) => ({
+    lat: ll[0],
+    lon: ll[1],
+    ele: altitude[i] != null ? Math.round(altitude[i] * 10) / 10 : null,
+    hr: heartrate[i] || null,
+    cad: cadence[i] ? cadence[i] * 2 : null,
+    time: time[i] != null ? time[i] : null,
+    d: distance[i] != null ? Math.round(distance[i]) : null,
+  }));
+
+  // Recalculate elevation gain/loss from stream
+  let elevationGain = 0;
+  let elevationLoss = 0;
+  let maxElevation = -Infinity;
+  let minElevation = Infinity;
+  for (let i = 1; i < trackPoints.length; i++) {
+    const prev = trackPoints[i - 1].ele;
+    const curr = trackPoints[i].ele;
+    if (prev != null && curr != null) {
+      const diff = curr - prev;
+      if (diff > 0) elevationGain += diff;
+      else elevationLoss += Math.abs(diff);
+      if (curr > maxElevation) maxElevation = curr;
+      if (curr < minElevation) minElevation = curr;
+    }
+  }
+
+  // HR zones from stream
+  let hrZones = null;
+  const hrs = heartrate.filter(Boolean);
+  if (hrs.length > 0) {
+    const maxHR = existingActivity?.maxHR || Math.max(...hrs);
+    const zones = [0, 0, 0, 0, 0];
+    const thresholds = [0.6, 0.7, 0.8, 0.9, 1.0].map((t) => t * maxHR);
+    for (const hr of hrs) {
+      if (hr < thresholds[0]) zones[0]++;
+      else if (hr < thresholds[1]) zones[1]++;
+      else if (hr < thresholds[2]) zones[2]++;
+      else if (hr < thresholds[3]) zones[3]++;
+      else zones[4]++;
+    }
+    const total = zones.reduce((a, b) => a + b, 0);
+    hrZones = zones.map((z) => Math.round((z / total) * 100));
+  }
+
+  return {
+    ...existingActivity,
+    elevationGain: elevationGain > 0 ? Math.round(elevationGain) : existingActivity?.elevationGain,
+    elevationLoss: elevationLoss > 0 ? Math.round(elevationLoss) : null,
+    maxElevation: maxElevation !== -Infinity ? Math.round(maxElevation) : null,
+    minElevation: minElevation !== Infinity ? Math.round(minElevation) : null,
+    avgHR: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : existingActivity?.avgHR,
+    maxHR: hrs.length ? Math.round(Math.max(...hrs)) : existingActivity?.maxHR,
+    hrZones,
+    avgCadence: cadence.length
+      ? Math.round(cadence.filter(Boolean).reduce((a, b) => a + b, 0) / cadence.filter(Boolean).length) * 2
+      : existingActivity?.avgCadence,
+    trackPoints,
+    streamsLoaded: true,
+  };
+}
+
 // Fetch all run activities, calling onProgress(count) as each batch arrives
 export async function fetchAllActivities(existingIds = new Set(), onProgress) {
   const all = [];

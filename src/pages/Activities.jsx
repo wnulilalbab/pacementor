@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Upload, Search, SortAsc, SortDesc } from 'lucide-react';
+import { Upload, Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import ActivityCard from '../components/ActivityCard';
 import { fmtDistance, fmtDuration } from '../utils/formatters';
@@ -49,7 +49,7 @@ export default function Activities() {
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
         <div className="text-6xl">📭</div>
         <div>
-          <h2 className="text-xl font-bold text-white">No activities yet</h2>
+          <h2 className="text-xl font-bold text-slate-800">No activities yet</h2>
           <p className="text-slate-400 text-sm mt-1">Upload a GPX file to get started</p>
         </div>
         <Link to="/upload" className="btn-primary flex items-center gap-2">
@@ -64,7 +64,7 @@ export default function Activities() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Activities</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Activities</h1>
           <p className="text-slate-400 text-sm">
             {activities.length} runs · {fmtDistance(totalDist, unit)} · {fmtDuration(totalTime)}
           </p>
@@ -78,19 +78,19 @@ export default function Activities() {
       {/* Filters */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search activities…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+            className="input-field w-full pl-9"
           />
         </div>
         <select
           value={sortIdx}
           onChange={(e) => setSortIdx(Number(e.target.value))}
-          className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-300 focus:outline-none"
+          className="input-field px-3 py-2 text-sm"
         >
           {SORT_OPTIONS.map((opt, i) => (
             <option key={i} value={i}>{opt.label}</option>
@@ -100,7 +100,7 @@ export default function Activities() {
 
       {/* List */}
       {sorted.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">No activities match your search</div>
+        <div className="text-center py-12 text-slate-400">No activities match your search</div>
       ) : (
         <div className="space-y-3">
           {sorted.map((act) => (

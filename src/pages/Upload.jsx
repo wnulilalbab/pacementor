@@ -24,7 +24,6 @@ export default function Upload() {
     setState('parsing');
     setProgress(0);
     try {
-      // Simulate progress ticks while parsing (GPX parsing is synchronous-ish)
       const ticker = setInterval(() => setProgress((p) => Math.min(p + 15, 85)), 100);
       const activity = await parseGPX(file, settings);
       clearInterval(ticker);
@@ -67,7 +66,7 @@ export default function Upload() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Upload Activity</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Upload Activity</h1>
         <p className="text-slate-400 text-sm mt-1">Import your GPX file from Garmin, Strava, or any GPS device</p>
       </div>
 
@@ -81,20 +80,20 @@ export default function Upload() {
             onClick={() => inputRef.current?.click()}
             className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center gap-4 cursor-pointer transition-all ${
               dragOver
-                ? 'border-orange-400 bg-orange-500/10'
-                : 'border-slate-600 hover:border-slate-500 hover:bg-slate-700/20'
+                ? 'border-brand-400 bg-brand-50'
+                : 'border-brand-200 hover:border-brand-400 hover:bg-brand-50/50'
             }`}
           >
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${dragOver ? 'bg-orange-500/20' : 'bg-slate-700'}`}>
-              <UploadIcon size={32} className={dragOver ? 'text-orange-400' : 'text-slate-400'} />
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${dragOver ? 'bg-brand-100' : 'bg-brand-50'}`}>
+              <UploadIcon size={32} className={dragOver ? 'text-brand-500' : 'text-brand-400'} />
             </div>
             <div className="text-center">
-              <p className="text-white font-medium">Drop your GPX file here</p>
+              <p className="text-slate-700 font-medium">Drop your GPX file here</p>
               <p className="text-slate-400 text-sm mt-1">or click to browse</p>
             </div>
             <div className="flex gap-2">
               {['Garmin', 'Strava', 'Wahoo', 'Polar', 'Suunto'].map((brand) => (
-                <span key={brand} className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">
+                <span key={brand} className="text-xs bg-brand-50 border border-brand-100 text-slate-500 px-2 py-0.5 rounded-full">
                   {brand}
                 </span>
               ))}
@@ -102,7 +101,7 @@ export default function Upload() {
           </div>
           <input ref={inputRef} type="file" accept=".gpx" className="hidden" onChange={onFileChange} />
           {state === 'error' && (
-            <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+            <div className="mt-3 flex items-center gap-2 text-red-500 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-3">
               <AlertCircle size={16} />
               {error}
             </div>
@@ -113,15 +112,15 @@ export default function Upload() {
       {/* Parsing progress */}
       {state === 'parsing' && (
         <div className="card p-8 flex flex-col items-center gap-4">
-          <FileText size={40} className="text-orange-400 animate-pulse" />
-          <p className="text-white font-medium">Parsing GPX file…</p>
-          <div className="w-full bg-slate-700 rounded-full h-2">
+          <FileText size={40} className="text-brand-500 animate-pulse" />
+          <p className="text-slate-700 font-medium">Parsing GPX file…</p>
+          <div className="w-full bg-brand-50 rounded-full h-2">
             <div
-              className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+              className="bg-brand-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-slate-500 text-sm">Calculating splits, best efforts, and HR zones</p>
+          <p className="text-slate-400 text-sm">Calculating splits, best efforts, and HR zones</p>
         </div>
       )}
 
@@ -131,10 +130,10 @@ export default function Upload() {
           <div className="card p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold text-white">{parsed.name}</h2>
+                <h2 className="text-lg font-bold text-slate-800">{parsed.name}</h2>
                 <p className="text-slate-400 text-sm">{fmtDate(parsed.date)}</p>
               </div>
-              <button onClick={reset} className="text-slate-500 hover:text-white transition-colors">
+              <button onClick={reset} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -151,11 +150,11 @@ export default function Upload() {
             </div>
 
             {parsed.bestEfforts?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Best Efforts Found</p>
+              <div className="mt-4 pt-4 border-t border-brand-100">
+                <p className="text-xs text-slate-400 mb-2 uppercase tracking-wider">Best Efforts Found</p>
                 <div className="flex flex-wrap gap-2">
                   {parsed.bestEfforts.map((e) => (
-                    <span key={e.name} className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-lg">
+                    <span key={e.name} className="text-xs bg-brand-50 border border-brand-100 text-brand-600 px-2 py-1 rounded-lg">
                       {e.name}
                     </span>
                   ))}
@@ -178,8 +177,8 @@ export default function Upload() {
       {/* Success */}
       {state === 'success' && (
         <div className="card p-12 flex flex-col items-center gap-4">
-          <CheckCircle size={48} className="text-green-400" />
-          <p className="text-white font-semibold text-lg">Activity saved!</p>
+          <CheckCircle size={48} className="text-accent-500" />
+          <p className="text-slate-800 font-semibold text-lg">Activity saved!</p>
           <p className="text-slate-400 text-sm">Redirecting to activity details…</p>
         </div>
       )}
@@ -189,9 +188,9 @@ export default function Upload() {
 
 function PreviewStat({ label, value }) {
   return (
-    <div className="bg-slate-700/40 rounded-xl p-3">
-      <div className="text-xs text-slate-500 mb-1">{label}</div>
-      <div className="font-semibold text-white text-sm">{value}</div>
+    <div className="bg-brand-50 rounded-xl p-3">
+      <div className="text-xs text-slate-400 mb-1">{label}</div>
+      <div className="font-semibold text-slate-800 text-sm">{value}</div>
     </div>
   );
 }

@@ -27,6 +27,13 @@ function reducer(state, action) {
         ...state,
         activities: state.activities.filter((a) => a.id !== action.payload),
       };
+    case 'UPDATE_ACTIVITY':
+      return {
+        ...state,
+        activities: state.activities.map((a) =>
+          a.id === action.payload.id ? { ...a, ...action.payload } : a
+        ),
+      };
     case 'SET_SETTINGS':
       return { ...state, settings: action.payload };
     default:
@@ -57,6 +64,12 @@ export function AppProvider({ children }) {
     dispatch({ type: 'DELETE_ACTIVITY', payload: id });
   }
 
+  function updateActivity(activity) {
+    const { trackPoints, ...summary } = activity;
+    storageSave(activity);
+    dispatch({ type: 'UPDATE_ACTIVITY', payload: summary });
+  }
+
   function updateSettings(settings) {
     storageSaveSettings(settings);
     dispatch({ type: 'SET_SETTINGS', payload: settings });
@@ -69,6 +82,7 @@ export function AppProvider({ children }) {
         settings: state.settings,
         addActivity,
         deleteActivity,
+        updateActivity,
         updateSettings,
       }}
     >

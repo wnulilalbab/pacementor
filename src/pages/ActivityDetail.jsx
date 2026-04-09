@@ -11,9 +11,10 @@ import {
   Zap,
   Flame,
   Activity,
+  Download,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { getTrackPoints } from '../utils/storage';
+import { getTrackPoints, saveActivity } from '../utils/storage';
 import {
   fmtDistance,
   fmtDuration,
@@ -22,8 +23,6 @@ import {
   fmtElevation,
   fmtDate,
   fmtTime,
-  HR_ZONE_LABELS,
-  HR_ZONE_COLORS,
 } from '../utils/formatters';
 import StatCard from '../components/StatCard';
 import ActivityMap from '../components/map/ActivityMap';
@@ -33,11 +32,12 @@ import HRChart from '../components/charts/HRChart';
 import HRZonesChart from '../components/charts/HRZonesChart';
 import SplitsTable from '../components/SplitsTable';
 import BestEfforts from '../components/BestEfforts';
+import { fetchActivityStreams } from '../utils/stravaApi';
 
 function Section({ title, children, className = '' }) {
   return (
     <section className={`card p-4 ${className}`}>
-      <h2 className="text-sm font-semibold text-white mb-4">{title}</h2>
+      <h2 className="text-sm font-semibold text-slate-700 mb-4">{title}</h2>
       {children}
     </section>
   );
@@ -46,9 +46,11 @@ function Section({ title, children, className = '' }) {
 export default function ActivityDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activities, deleteActivity, settings } = useApp();
+  const { activities, deleteActivity, updateActivity, settings } = useApp();
   const [trackPoints, setTrackPoints] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loadingStreams, setLoadingStreams] = useState(false);
+  const [streamsLoaded, setStreamsLoaded] = useState(false);
 
   const activity = activities.find((a) => a.id === id);
   const unit = settings.unit || 'metric';
@@ -57,6 +59,10 @@ export default function ActivityDetail() {
     if (id) {
       const tp = getTrackPoints(id);
       setTrackPoints(tp || []);
+      // Check if streams data already present (has elevation/HR on track points)
+      if (tp?.length && (tp[0].ele != null || tp[0].hr != null)) {
+        setStreamsLoaded(true);
+      }
     }
   }, [id]);
 
@@ -64,7 +70,7 @@ export default function ActivityDetail() {
     return (
       <div className="text-center py-20">
         <p className="text-slate-400">Activity not found.</p>
-        <Link to="/activities" className="text-orange-400 text-sm mt-2 inline-block">
+        <Link to="/activities" className="text-brand-500 text-sm mt-2 inline-block">
           ← Back to activities
         </Link>
       </div>
@@ -78,6 +84,24 @@ export default function ActivityDetail() {
     } else {
       setConfirmDelete(true);
       setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  }
+
+  async function handleLoadStreams() {
+    if (!activity.stravaId) return;
+    setLoadingStreams(true);
+    try {
+      const enriched = await fetchActivityStreams(activity.stravaId, activity);
+      // Save enriched activity and track points
+      saveActivity(enriched);
+      setTrackPoints(getTrackPoints(id));
+      setStreamsLoaded(true);
+      // Update context so stats refresh
+      if (updateActivity) updateActivity(enriched);
+    } catch (err) {
+      alert(`Failed to load detailed data: ${err.message}`);
+    } finally {
+      setLoadingStreams(false);
     }
   }
 
@@ -101,27 +125,40 @@ export default function ActivityDetail() {
         <div>
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-2 transition-colors"
+            className="flex items-center gap-1 text-slate-400 hover:text-slate-700 text-sm mb-2 transition-colors"
           >
             <ArrowLeft size={15} />
             Back
           </button>
-          <h1 className="text-2xl font-bold text-white leading-tight">{activity.name}</h1>
+          <h1 className="text-2xl font-bold text-slate-800 leading-tight">{activity.name}</h1>
           <p className="text-slate-400 text-sm mt-0.5">
             {fmtDate(activity.date)} · {fmtTime(activity.date)}
           </p>
         </div>
-        <button
-          onClick={handleDelete}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all ${
-            confirmDelete
-              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-              : 'text-slate-500 hover:text-red-400 hover:bg-slate-700'
-          }`}
-        >
-          <Trash2 size={15} />
-          {confirmDelete ? 'Confirm?' : ''}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Load full data button for Strava activities */}
+          {activity.source === 'strava' && !streamsLoaded && (
+            <button
+              onClick={handleLoadStreams}
+              disabled={loadingStreams}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm bg-brand-50 border border-brand-200 text-brand-600 hover:bg-brand-100 transition-all disabled:opacity-60"
+            >
+              <Download size={14} className={loadingStreams ? 'animate-bounce' : ''} />
+              {loadingStreams ? 'Loading…' : 'Load full data'}
+            </button>
+          )}
+          <button
+            onClick={handleDelete}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all ${
+              confirmDelete
+                ? 'bg-red-50 text-red-500 border border-red-200'
+                : 'text-slate-400 hover:text-red-400 hover:bg-red-50'
+            }`}
+          >
+            <Trash2 size={15} />
+            {confirmDelete ? 'Confirm?' : ''}
+          </button>
+        </div>
       </div>
 
       {/* Key metrics */}
@@ -168,7 +205,7 @@ export default function ActivityDetail() {
         {trackPoints !== null ? (
           <ActivityMap trackPoints={trackPoints} height={320} />
         ) : (
-          <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
+          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
             Loading map…
           </div>
         )}
@@ -180,13 +217,13 @@ export default function ActivityDetail() {
           <div className="flex gap-4 text-xs text-slate-400 mb-3">
             {activity.elevationGain != null && (
               <span>
-                <span className="text-amber-400">↑</span>{' '}
+                <span className="text-amber-500">↑</span>{' '}
                 {fmtElevation(activity.elevationGain, unit)} gain
               </span>
             )}
             {activity.elevationLoss != null && (
               <span>
-                <span className="text-sky-400">↓</span>{' '}
+                <span className="text-brand-500">↓</span>{' '}
                 {fmtElevation(activity.elevationLoss, unit)} loss
               </span>
             )}
@@ -205,7 +242,7 @@ export default function ActivityDetail() {
             <span>Avg {fmtPace(activity.avgPace, unit)}</span>
             {activity.splits?.length > 1 && (
               <>
-                <span className="text-green-400">
+                <span className="text-accent-500">
                   Best {fmtPace(Math.min(...activity.splits.map((s) => s.pace).filter(Boolean)), unit)}
                 </span>
                 <span className="text-red-400">
@@ -227,7 +264,7 @@ export default function ActivityDetail() {
             {effortScore && (
               <span>
                 Effort score{' '}
-                <span className="text-orange-400 font-semibold">{effortScore}/5</span>
+                <span className="text-brand-500 font-semibold">{effortScore}/5</span>
               </span>
             )}
           </div>
@@ -291,9 +328,9 @@ export default function ActivityDetail() {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="bg-slate-700/30 rounded-lg px-3 py-2">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="text-white font-medium text-sm">{value}</div>
+    <div className="bg-brand-50 rounded-lg px-3 py-2">
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="text-slate-800 font-medium text-sm">{value}</div>
     </div>
   );
 }

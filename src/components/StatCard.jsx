@@ -4,16 +4,13 @@ export default function StatCard({ label, value, sub, icon: Icon, accent = false
       <div className="flex items-center justify-between">
         <span className="stat-label">{label}</span>
         {Icon && (
-          <Icon
-            size={16}
-            className={accent ? 'text-orange-400' : 'text-slate-500'}
-          />
+          <Icon size={16} className={accent ? 'text-brand-500' : 'text-slate-300'} />
         )}
       </div>
-      <div className={`stat-value ${accent ? 'text-orange-400' : 'text-white'}`}>
+      <div className={`stat-value ${accent ? 'text-brand-500' : 'text-slate-800'}`}>
         {value ?? '--'}
       </div>
-      {sub && <div className="text-xs text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-400">{sub}</div>}
     </div>
   );
 }

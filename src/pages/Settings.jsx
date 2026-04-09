@@ -6,7 +6,6 @@ import { fmtBytes as fmtBytesFormatter } from '../utils/formatters';
 import { getStoredToken, clearToken, getStravaAuthUrl } from '../utils/stravaAuth';
 import { fetchAllActivities, fetchAthlete } from '../utils/stravaApi';
 
-// ── Strava logo (inline SVG) ──────────────────────────────────────────────────
 function StravaLogo({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="#FC4C02">
@@ -22,16 +21,14 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
-  // Strava state
   const [stravaToken, setStravaToken] = useState(getStoredToken);
-  const [stravaStatus, setStravaStatus] = useState(null); // 'connected' | 'error' | null
+  const [stravaStatus, setStravaStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
-  const [syncDone, setSyncDone] = useState(null); // number of imported activities
+  const [syncDone, setSyncDone] = useState(null);
 
-  // Detect OAuth redirect result (hash has ?strava=connected / ?strava=error)
   useEffect(() => {
-    const hash = window.location.hash; // e.g. "#/settings?strava=connected"
+    const hash = window.location.hash;
     if (hash.includes('strava=connected')) {
       setStravaToken(getStoredToken());
       setStravaStatus('connected');
@@ -42,7 +39,6 @@ export default function Settings() {
     }
   }, []);
 
-  // ── Profile save ─────────────────────────────────────────────────────────────
   function handleSave(e) {
     e.preventDefault();
     const parsed = {
@@ -56,7 +52,6 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  // ── Delete all ───────────────────────────────────────────────────────────────
   function handleClearAll() {
     if (confirmClear) {
       [...activities].forEach((a) => deleteActivity(a.id));
@@ -67,14 +62,12 @@ export default function Settings() {
     }
   }
 
-  // ── Strava connect ───────────────────────────────────────────────────────────
   function handleConnect() {
     const clientId = form.stravaClientId?.trim();
     if (!clientId) {
       alert('Please enter your Strava Client ID first, then save settings.');
       return;
     }
-    // Save clientId to settings before redirecting
     updateSettings({ ...settings, ...form, stravaClientId: clientId });
     window.location.href = getStravaAuthUrl(clientId);
   }
@@ -86,7 +79,6 @@ export default function Settings() {
     setSyncDone(null);
   }
 
-  // ── Strava sync ──────────────────────────────────────────────────────────────
   async function handleSync() {
     setSyncing(true);
     setSyncCount(0);
@@ -96,7 +88,6 @@ export default function Settings() {
       const imported = await fetchAllActivities(existingIds, (count) => {
         setSyncCount(count);
       });
-      // Save each new activity
       for (const act of imported) {
         addActivity(act);
       }
@@ -114,35 +105,33 @@ export default function Settings() {
   return (
     <div className="max-w-lg space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Settings</h1>
         <p className="text-slate-400 text-sm mt-1">Personalize your experience</p>
       </div>
 
-      {/* ── Strava ──────────────────────────────────────────────────────────── */}
+      {/* Strava */}
       <div className="card p-4 space-y-4">
         <div className="flex items-center gap-2">
           <StravaLogo />
-          <h2 className="text-sm font-semibold text-white">Strava</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Strava</h2>
         </div>
 
-        {/* Status banners */}
         {stravaStatus === 'connected' && (
-          <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2 text-sm text-green-400">
+          <div className="flex items-center gap-2 bg-accent-50 border border-accent-200 rounded-xl px-3 py-2 text-sm text-accent-600">
             <CheckCircle size={15} /> Connected successfully!
           </div>
         )}
         {stravaStatus === 'error' && (
-          <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-sm text-red-400">
+          <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2 text-sm text-red-500">
             <XCircle size={15} /> Connection failed — please try again.
           </div>
         )}
 
         {!stravaToken ? (
-          /* ── Not connected ── */
           <div className="space-y-3">
             <Field
               label="Strava Client ID"
-              hint={<>Get it from <span className="text-orange-400">strava.com/settings/api</span></>}
+              hint={<>Get it from <span className="text-brand-500">strava.com/settings/api</span></>}
             >
               <input
                 type="text"
@@ -161,21 +150,20 @@ export default function Settings() {
             </button>
           </div>
         ) : (
-          /* ── Connected ── */
           <div className="space-y-3">
-            <div className="flex items-center gap-3 bg-slate-700/50 rounded-xl p-3">
-              <div className="w-8 h-8 rounded-full bg-[#FC4C02]/20 flex items-center justify-center">
+            <div className="flex items-center gap-3 bg-brand-50 border border-brand-100 rounded-xl p-3">
+              <div className="w-8 h-8 rounded-full bg-[#FC4C02]/10 flex items-center justify-center">
                 <StravaLogo size={16} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-medium">
+                <p className="text-slate-700 text-sm font-medium">
                   {athlete ? `${athlete.firstname} ${athlete.lastname}` : 'Strava Account'}
                 </p>
                 <p className="text-slate-400 text-xs truncate">
                   {athlete?.city ? `${athlete.city}, ` : ''}{athlete?.country || 'Connected'}
                 </p>
               </div>
-              <div className="w-2 h-2 bg-green-400 rounded-full shrink-0" />
+              <div className="w-2 h-2 bg-accent-400 rounded-full shrink-0" />
             </div>
 
             <button
@@ -190,7 +178,7 @@ export default function Settings() {
             </button>
 
             {syncDone !== null && (
-              <p className="text-center text-sm text-green-400">
+              <p className="text-center text-sm text-accent-600">
                 ✓ {syncDone > 0
                   ? `${syncDone} new ${syncDone === 1 ? 'activity' : 'activities'} imported`
                   : 'Already up to date'}
@@ -208,10 +196,10 @@ export default function Settings() {
         )}
       </div>
 
-      {/* ── Profile ─────────────────────────────────────────────────────────── */}
+      {/* Profile */}
       <form onSubmit={handleSave} className="space-y-4">
         <div className="card p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-white">Profile</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Profile</h2>
 
           <Field label="Your name (optional)">
             <input
@@ -262,15 +250,15 @@ export default function Settings() {
 
         {/* Units */}
         <div className="card p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white">Units</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Units</h2>
           <div className="flex gap-3">
             {['metric', 'imperial'].map((u) => (
               <label
                 key={u}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border cursor-pointer transition-all ${
                   form.unit === u
-                    ? 'border-orange-500 bg-orange-500/10 text-orange-400'
-                    : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                    ? 'border-brand-400 bg-brand-50 text-brand-600'
+                    : 'border-brand-100 text-slate-400 hover:border-brand-300'
                 }`}
               >
                 <input
@@ -282,7 +270,7 @@ export default function Settings() {
                   className="sr-only"
                 />
                 <span className="capitalize text-sm font-medium">{u}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-400">
                   {u === 'metric' ? 'km · m' : 'mi · ft'}
                 </span>
               </label>
@@ -296,27 +284,27 @@ export default function Settings() {
         </button>
       </form>
 
-      {/* ── Storage ─────────────────────────────────────────────────────────── */}
+      {/* Storage */}
       <div className="card p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-white">Storage</h2>
+        <h2 className="text-sm font-semibold text-slate-700">Storage</h2>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400">Data stored locally</span>
-          <span className="text-white font-medium">{fmtBytesFormatter(usage)}</span>
+          <span className="text-slate-700 font-medium">{fmtBytesFormatter(usage)}</span>
         </div>
-        <div className="w-full bg-slate-700 rounded-full h-1.5">
+        <div className="w-full bg-brand-50 rounded-full h-1.5">
           <div
-            className="bg-orange-500 h-1.5 rounded-full"
+            className="bg-brand-500 h-1.5 rounded-full"
             style={{ width: `${Math.min(100, (usage / (5 * 1024 * 1024)) * 100)}%` }}
           />
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-400">
           {activities.length} activities · ~5 MB limit
         </p>
       </div>
 
-      {/* ── Danger zone ─────────────────────────────────────────────────────── */}
+      {/* Danger zone */}
       {activities.length > 0 && (
-        <div className="card p-4 border-red-500/20 space-y-3">
+        <div className="card p-4 border-red-100 space-y-3">
           <div className="flex items-center gap-2">
             <AlertTriangle size={15} className="text-red-400" />
             <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
@@ -329,7 +317,7 @@ export default function Settings() {
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
               confirmClear
                 ? 'bg-red-500 text-white'
-                : 'border border-red-500/30 text-red-400 hover:bg-red-500/10'
+                : 'border border-red-200 text-red-400 hover:bg-red-50'
             }`}
           >
             <Trash2 size={14} />
@@ -344,9 +332,9 @@ export default function Settings() {
 function Field({ label, hint, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs text-slate-400 font-medium">{label}</label>
+      <label className="text-xs text-slate-500 font-medium">{label}</label>
       {children}
-      {hint && <p className="text-xs text-slate-600">{hint}</p>}
+      {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }

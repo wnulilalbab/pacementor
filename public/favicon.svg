@@ -1,18 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0f172a"/>
-  <!-- Head -->
-  <circle cx="40" cy="12" r="7" fill="#f97316"/>
-  <!-- Torso -->
-  <path d="M 38 19 L 33 36" stroke="#f97316" stroke-width="4.5" stroke-linecap="round" fill="none"/>
-  <!-- Front arm -->
-  <path d="M 36 25 L 25 30 L 23 24" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
-  <!-- Back arm -->
-  <path d="M 36 25 L 46 31" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <!-- Front leg -->
-  <path d="M 33 36 L 25 47 L 21 57" stroke="#f97316" stroke-width="4" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
-  <!-- Back leg -->
-  <path d="M 33 36 L 43 47 L 50 55" stroke="#f97316" stroke-width="4" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
-  <!-- Speed lines -->
-  <line x1="6" y1="25" x2="18" y2="25" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-  <line x1="4" y1="32" x2="16" y2="32" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4AAEE0"/>
+      <stop offset="100%" stop-color="#5DCE7A"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="url(#g)"/>
+  <text x="32" y="44"
+        font-family="'Arial Black',Arial,sans-serif"
+        font-weight="900"
+        font-style="italic"
+        font-size="34"
+        fill="white"
+        text-anchor="middle">PM</text>
 </svg>
