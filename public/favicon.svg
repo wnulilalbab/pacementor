@@ -1,4 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#0f172a"/>
-  <text y=".9em" font-size="80" x="10">🏃</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0f172a"/>
+  <!-- Head -->
+  <circle cx="40" cy="12" r="7" fill="#f97316"/>
+  <!-- Torso -->
+  <path d="M 38 19 L 33 36" stroke="#f97316" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+  <!-- Front arm -->
+  <path d="M 36 25 L 25 30 L 23 24" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
+  <!-- Back arm -->
+  <path d="M 36 25 L 46 31" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <!-- Front leg -->
+  <path d="M 33 36 L 25 47 L 21 57" stroke="#f97316" stroke-width="4" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
+  <!-- Back leg -->
+  <path d="M 33 36 L 43 47 L 50 55" stroke="#f97316" stroke-width="4" stroke-linecap="round" fill="none" stroke-linejoin="round"/>
+  <!-- Speed lines -->
+  <line x1="6" y1="25" x2="18" y2="25" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  <line x1="4" y1="32" x2="16" y2="32" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
 </svg>
