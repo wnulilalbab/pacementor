@@ -91,7 +91,7 @@ export default function ActivityDetail() {
     if (!activity.stravaId) return;
     setLoadingStreams(true);
     try {
-      const enriched = await fetchActivityStreams(activity.stravaId, activity);
+      const enriched = await fetchActivityStreams(activity.stravaId, activity, settings);
       // Save enriched activity and track points
       saveActivity(enriched);
       setTrackPoints(getTrackPoints(id));

@@ -283,7 +283,13 @@ export async function parseGPX(file, settings = {}) {
     ? Math.round(hrVals.reduce((a, b) => a + b, 0) / hrVals.length)
     : null;
   const maxHR = hrVals.length ? Math.max(...hrVals) : null;
-  const hrMax = settings.hrMax || maxHR;
+  // Resolve true HRmax: user setting → 220-age formula → run max + 5% buffer
+  let hrMax = settings.hrMax || null;
+  if (!hrMax && settings.birthYear) {
+    const age = new Date().getFullYear() - Number(settings.birthYear);
+    if (age > 10 && age < 100) hrMax = Math.round(220 - age);
+  }
+  if (!hrMax && maxHR) hrMax = Math.round(maxHR * 1.05);
   const hrZones = hrVals.length > 30 ? calcHRZones(hrVals, hrMax) : null;
 
   // Cadence
