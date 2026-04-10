@@ -110,7 +110,7 @@ function SessionCard({ session, goal, settings, updateSession }) {
     setAnalysing(true);
     setAnalysisError('');
     try {
-      const analysis = await analyzeRunResult(apiKey, session, resultActivity, goal);
+      const analysis = await analyzeRunResult(apiKey, session, resultActivity, goal, !!settings.testingMode);
       updateSession(session.id, { aiAnalysis: analysis, analysisStatus: 'done' });
     } catch (e) {
       setAnalysisError(e.message);
@@ -331,7 +331,7 @@ function AdjustPlanButton({ plan, settings, saveCoachingPlan }) {
     setError('');
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const result = await aiAdjustPlan(apiKey, plan, today);
+      const result = await aiAdjustPlan(apiKey, plan, today, !!settings.testingMode);
 
       // Replace future sessions + milestones
       const pastSessions = plan.sessions.filter((s) => new Date(s.date) < new Date(today));

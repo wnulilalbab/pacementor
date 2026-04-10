@@ -157,6 +157,36 @@ export default function Settings() {
             <CheckCircle size={13} /> API key saved — AI coaching features are enabled
           </div>
         )}
+
+        {/* Testing mode toggle */}
+        <div className={`flex items-center justify-between rounded-xl border px-3 py-3 transition-all ${
+          form.testingMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div>
+            <p className={`text-sm font-medium ${form.testingMode ? 'text-amber-700' : 'text-slate-700'}`}>
+              Testing Mode
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Uses Claude Haiku + minimal output — ~50× cheaper for testing functionality
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, testingMode: !f.testingMode }))}
+            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+              form.testingMode ? 'bg-amber-400' : 'bg-slate-200'
+            }`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+              form.testingMode ? 'translate-x-5' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
+        {form.testingMode && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <AlertTriangle size={13} /> Testing mode on — plans limited to 7 days, short responses, cheap model
+          </div>
+        )}
       </div>
 
       {/* Strava */}

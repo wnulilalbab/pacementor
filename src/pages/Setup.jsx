@@ -372,7 +372,7 @@ function QuestionsStep({ goal, benchmarkIds, questions, setQuestions, answers, s
     setLoading(true);
     setError('');
     try {
-      const qs = await generateFollowUpQuestions(apiKey, goal, benchmarkIds);
+      const qs = await generateFollowUpQuestions(apiKey, goal, benchmarkIds, !!settings.testingMode);
       setQuestions(qs);
       setAnswers(Object.fromEntries(qs.map((q) => [q.id, ''])));
     } catch (e) {
@@ -511,7 +511,8 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
         benchmarkIds,
         qas,
         settings,
-        startDate
+        startDate,
+        !!settings.testingMode
       );
       if (plan._generation) setGenerationInfo(plan._generation);
       onGenerated(plan);
@@ -547,12 +548,15 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
         <p className="text-slate-800 font-semibold text-lg">Your plan is ready!</p>
         <p className="text-slate-400 text-sm">Redirecting to your coaching plan…</p>
         {generationInfo && (
-          <div className="text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-center">
+          <div className={`text-xs rounded-xl px-4 py-2 text-center border ${
+            generationInfo.testMode
+              ? 'bg-amber-50 border-amber-200 text-amber-600'
+              : 'bg-slate-50 border-slate-100 text-slate-400'
+          }`}>
+            {generationInfo.testMode && <span className="font-semibold">Test mode · </span>}
             {generationInfo.inputTokens.toLocaleString()} in · {generationInfo.outputTokens.toLocaleString()} out
             {' · '}
-            <span className="font-medium text-slate-500">
-              ~${generationInfo.estimatedCostUSD.toFixed(4)}
-            </span>
+            <span className="font-medium">~${generationInfo.estimatedCostUSD.toFixed(4)}</span>
           </div>
         )}
       </div>
@@ -563,12 +567,21 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
     ? `Zone 2 run — ${fmtDistance(goal.targetDistance || 5000)} at ${fmtPace(goal.targetPace || 420)}`
     : { half_marathon: 'Half Marathon PB', marathon: 'Marathon PB', '5k': '5K PB', '10k': '10K PB' }[goal.targetRace] || 'Race PB';
 
+  const testingMode = !!settings.testingMode;
+
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-bold text-slate-800">Ready to generate</h2>
         <p className="text-slate-400 text-sm mt-1">Review your setup before creating the plan.</p>
       </div>
+
+      {testingMode && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+          <AlertCircle size={13} className="shrink-0" />
+          <span><strong>Testing mode</strong> — will generate a 7-day plan using Claude Haiku (~50× cheaper)</span>
+        </div>
+      )}
 
       <div className="card p-4 space-y-3">
         <div className="flex items-start gap-3">
