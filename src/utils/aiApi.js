@@ -26,7 +26,11 @@ async function callClaude(apiKey, userContent, systemPrompt) {
   if (res.status === 429) throw new Error('API rate limit reached. Please wait a moment and try again.');
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `API error ${res.status}`);
+    const msg = err?.error?.message || '';
+    if (msg.toLowerCase().includes('credit balance') || msg.toLowerCase().includes('billing')) {
+      throw new Error('Your Anthropic API credit balance is too low. Add credits at console.anthropic.com → Billing.');
+    }
+    throw new Error(msg || `API error ${res.status}`);
   }
 
   const data = await res.json();
