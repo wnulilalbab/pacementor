@@ -1,9 +1,8 @@
 const ACTIVITIES_KEY = 'pacementor_activities';
 const SETTINGS_KEY = 'pacementor_settings';
 
-function trackKey(id) {
-  return `pacementor_track_${id}`;
-}
+// Reuse same key name for backward compat — now stores analytics object, not raw track points
+function analyticsKey(id) { return `pacementor_track_${id}`; }
 
 // ── Activities ───────────────────────────────────────────────────────────────
 
@@ -21,27 +20,25 @@ export function getActivity(id) {
 }
 
 export function saveActivity(activity) {
-  const { trackPoints, ...summary } = activity;
+  const { analytics, trackPoints, ...summary } = activity; // strip both old and new data fields
   const activities = getActivities().filter((a) => a.id !== activity.id);
   activities.unshift(summary);
 
   try {
     localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
-    if (trackPoints) {
-      localStorage.setItem(trackKey(activity.id), JSON.stringify(trackPoints));
+    if (analytics) {
+      localStorage.setItem(analyticsKey(activity.id), JSON.stringify(analytics));
     }
   } catch (e) {
     // Storage quota exceeded — remove oldest activity and retry
     if (activities.length > 1) {
       const oldest = activities.pop();
-      localStorage.removeItem(trackKey(oldest.id));
+      localStorage.removeItem(analyticsKey(oldest.id));
       localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
       try {
-        if (trackPoints) {
-          localStorage.setItem(trackKey(activity.id), JSON.stringify(trackPoints));
-        }
+        if (analytics) localStorage.setItem(analyticsKey(activity.id), JSON.stringify(analytics));
       } catch {
-        // Still no space — save without track
+        // Still no space — save without analytics
       }
     }
   }
@@ -50,12 +47,17 @@ export function saveActivity(activity) {
 export function deleteActivity(id) {
   const activities = getActivities().filter((a) => a.id !== id);
   localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
-  localStorage.removeItem(trackKey(id));
+  localStorage.removeItem(analyticsKey(id));
 }
 
-export function getTrackPoints(id) {
+export function getActivityAnalytics(id) {
   try {
-    return JSON.parse(localStorage.getItem(trackKey(id)) || 'null');
+    const raw = localStorage.getItem(analyticsKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Reject old format (array of track points with lat/lon)
+    if (Array.isArray(parsed)) return null;
+    return parsed;
   } catch {
     return null;
   }

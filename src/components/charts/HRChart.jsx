@@ -1,8 +1,17 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
-import { fmtDistance } from '../../utils/formatters';
+import { fmtDistance, fmtPace } from '../../utils/formatters';
 
-export default function HRChart({ trackPoints, avgHR, unit = 'metric' }) {
-  const data = (trackPoints || []).filter((p) => p.hr && p.d != null).map((p) => ({ d: p.d, hr: p.hr }));
+export default function HRChart({ analytics, avgHR, unit = 'metric' }) {
+  if (!analytics?.distSamples?.length) return null;
+
+  const data = analytics.distSamples
+    .map((d, i) => {
+      const hr = analytics.hrSamples?.[i];
+      if (!hr) return null;
+      return { d, hr };
+    })
+    .filter(Boolean);
+
   if (data.length < 2) return null;
 
   const hrs = data.map((d) => d.hr);

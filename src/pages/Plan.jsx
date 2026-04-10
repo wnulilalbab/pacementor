@@ -6,7 +6,7 @@ import {
   SkipForward, BarChart2, Calendar, Target, Flag, Zap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { getActivity, getTrackPoints } from '../utils/storage';
+import { getActivity } from '../utils/storage';
 import { analyzeRunResult, adjustPlan as aiAdjustPlan } from '../utils/aiApi';
 import { fmtDistance, fmtPace, fmtDuration, fmtDate } from '../utils/formatters';
 import HRZonesChart from '../components/charts/HRZonesChart';

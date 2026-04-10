@@ -208,58 +208,82 @@ export async function fetchActivitiesSince(afterISO, existingIds = new Set(), on
   return all;
 }
 
-// ── Fetch full per-point data + detailed metadata for one Strava activity ────
+// ── Fetch analytics data + detailed metadata for one Strava activity ─────────
 // Calls two endpoints in parallel:
-//   1. /activities/{id}          → calories, splits, best efforts, cadence
-//   2. /activities/{id}/streams  → per-second GPS, altitude, HR, cadence
+//   1. /activities/{id}         → calories, splits, best efforts, cadence
+//   2. /activities/{id}/streams → per-second HR, altitude, cadence, time, distance
+//   No lat/lon fetched — route is not needed, only metrics.
+import { computePercentiles } from './gpxParser';
+
 export async function fetchActivityStreams(stravaId, existingActivity, settings = {}) {
-  const streamKeys = 'latlng,altitude,heartrate,cadence,time,distance';
+  const streamKeys = 'altitude,heartrate,cadence,time,distance';
   const [detail, streams] = await Promise.all([
     apiFetch(`/activities/${stravaId}`),
     apiFetch(`/activities/${stravaId}/streams?keys=${streamKeys}&key_by_type=true`),
   ]);
 
-  // ── Streams ──────────────────────────────────────────────────────────────
-  const latlng    = streams.latlng?.data    || [];
   const altitude  = streams.altitude?.data  || [];
   const heartrate = streams.heartrate?.data || [];
   const cadence   = streams.cadence?.data   || [];
   const timeArr   = streams.time?.data      || [];
   const distArr   = streams.distance?.data  || [];
+  const n = timeArr.length || altitude.length || heartrate.length;
 
-  const trackPoints = latlng.map((ll, i) => ({
-    lat: ll[0],
-    lon: ll[1],
-    ele: altitude[i]  != null ? Math.round(altitude[i] * 10) / 10 : null,
-    hr:  heartrate[i] || null,
-    cad: cadence[i]   ? cadence[i] * 2 : null,
-    time: timeArr[i]  != null ? timeArr[i] : null,
-    d:   distArr[i]   != null ? Math.round(distArr[i]) : null,
-  }));
-
-  // Elevation stats from stream (smoothed to reduce noise)
+  // ── Elevation stats ───────────────────────────────────────────────────────
   let elevationGain = 0, elevationLoss = 0;
   let maxEle = -Infinity, minEle = Infinity;
-  const THRESHOLD = 1; // ignore micro-changes < 1m
-  for (let i = 1; i < trackPoints.length; i++) {
-    const prev = trackPoints[i - 1].ele;
-    const curr = trackPoints[i].ele;
+  for (let i = 1; i < altitude.length; i++) {
+    const prev = altitude[i - 1], curr = altitude[i];
     if (prev != null && curr != null) {
       const diff = curr - prev;
-      if (diff > THRESHOLD)        elevationGain += diff;
-      else if (diff < -THRESHOLD)  elevationLoss += Math.abs(diff);
+      if (diff > 1) elevationGain += diff;
+      else if (diff < -1) elevationLoss += Math.abs(diff);
       if (curr > maxEle) maxEle = curr;
       if (curr < minEle) minEle = curr;
     }
   }
 
-  // ── HR zones with correct HRmax ──────────────────────────────────────────
+  // ── HR ────────────────────────────────────────────────────────────────────
   const hrs = heartrate.filter(Boolean);
   const runMaxHR = hrs.length ? Math.max(...hrs) : (detail.max_heartrate || existingActivity?.maxHR);
-  const hrMax = resolveHRmax(settings, runMaxHR);
+  const hrMax   = resolveHRmax(settings, runMaxHR);
   const hrZones = hrs.length > 30 ? calcHRZones(hrs, hrMax) : null;
 
-  // ── Metadata from detailed activity endpoint ──────────────────────────────
+  // ── Build analytics (30-second aggregation, no route data) ───────────────
+  const INTERVAL = 30;
+  const hrSamples = [], eleSamples = [], cadSamples = [], paceSamples = [], distSamples = [];
+
+  for (let i = 0; i < n; i += INTERVAL) {
+    const end = Math.min(i + INTERVAL, n);
+    const bHR  = heartrate.slice(i, end).filter(Boolean);
+    const bEle = altitude.slice(i, end).filter((v) => v != null);
+    const bCad = cadence.slice(i, end).filter(Boolean);
+
+    const segDist = distArr.length ? (distArr[end - 1] ?? 0) - (distArr[i] ?? 0) : 0;
+    const segTime = timeArr.length ? (timeArr[end - 1] ?? 0) - (timeArr[i] ?? 0) : 0;
+    const pace = segDist > 10 && segTime > 5 ? Math.round(segTime / (segDist / 1000)) : null;
+
+    const avgOf = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+
+    hrSamples.push(avgOf(bHR));
+    eleSamples.push(avgOf(bEle));
+    cadSamples.push(bCad.length ? avgOf(bCad) * 2 : null);
+    paceSamples.push(pace);
+    distSamples.push(distArr.length ? Math.round(distArr[i] ?? 0) : Math.round(i * (existingActivity?.distance ?? 0) / n));
+  }
+
+  const analytics = {
+    intervalSecs:    INTERVAL,
+    hrSamples,
+    eleSamples,
+    cadSamples,
+    paceSamples,
+    distSamples,
+    hrPercentiles:   computePercentiles(hrSamples),
+    pacePercentiles: computePercentiles(paceSamples),
+  };
+
+  // ── Metadata ──────────────────────────────────────────────────────────────
   const splits      = parseSplits(detail.splits_metric);
   const bestEfforts = parseBestEfforts(detail.best_efforts);
 
@@ -267,32 +291,23 @@ export async function fetchActivityStreams(stravaId, existingActivity, settings 
   const avgCad = avgCadFromStream.length
     ? Math.round(avgCadFromStream.reduce((a, b) => a + b, 0) / avgCadFromStream.length) * 2
     : (detail.average_cadence ? Math.round(detail.average_cadence * 2) : existingActivity?.avgCadence);
-  const maxCad = avgCadFromStream.length
-    ? Math.max(...avgCadFromStream) * 2
-    : (detail.max_cadence ? detail.max_cadence * 2 : null);
+  const maxCad = avgCadFromStream.length ? Math.max(...avgCadFromStream) * 2 : (detail.max_cadence ? detail.max_cadence * 2 : null);
 
   return {
     ...existingActivity,
-
-    // Detailed metadata (only available from /activities/{id})
-    calories:     detail.calories     || existingActivity?.calories,
-    splits:       splits.length       ? splits      : existingActivity?.splits,
-    bestEfforts:  bestEfforts.length  ? bestEfforts : existingActivity?.bestEfforts,
+    calories:     detail.calories    || existingActivity?.calories,
+    splits:       splits.length      ? splits      : existingActivity?.splits,
+    bestEfforts:  bestEfforts.length ? bestEfforts : existingActivity?.bestEfforts,
     avgCadence:   avgCad,
     maxCadence:   maxCad,
-
-    // Elevation from streams (more accurate than Strava's summary)
     elevationGain: elevationGain > 0 ? Math.round(elevationGain) : existingActivity?.elevationGain,
     elevationLoss: elevationLoss > 0 ? Math.round(elevationLoss) : null,
     maxElevation:  maxEle !== -Infinity ? Math.round(maxEle) : null,
     minElevation:  minEle !== Infinity  ? Math.round(minEle) : null,
-
-    // HR from streams
     avgHR: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : existingActivity?.avgHR,
     maxHR: runMaxHR || existingActivity?.maxHR,
     hrZones,
-
-    trackPoints,
+    analytics,
     streamsLoaded: true,
   };
 }

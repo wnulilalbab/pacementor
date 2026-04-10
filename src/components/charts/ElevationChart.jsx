@@ -1,14 +1,17 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { fmtDistance, fmtElevation } from '../../utils/formatters';
 
-export default function ElevationChart({ trackPoints, unit = 'metric' }) {
-  if (!trackPoints?.length) return null;
-  const data = trackPoints
-    .filter((p) => p.ele != null && p.d != null)
-    .map((p) => ({
-      d: p.d,
-      ele: unit === 'imperial' ? Math.round(p.ele * 3.28084) : Math.round(p.ele),
-    }));
+export default function ElevationChart({ analytics, unit = 'metric' }) {
+  if (!analytics?.distSamples?.length) return null;
+
+  const data = analytics.distSamples
+    .map((d, i) => {
+      const ele = analytics.eleSamples?.[i];
+      if (ele == null) return null;
+      return { d, ele: unit === 'imperial' ? Math.round(ele * 3.28084) : Math.round(ele) };
+    })
+    .filter(Boolean);
+
   if (data.length < 2) return null;
 
   const eleValues = data.map((d) => d.ele);
