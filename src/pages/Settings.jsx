@@ -322,19 +322,32 @@ export default function Settings() {
       {/* Storage */}
       <div className="card p-4 space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Storage</h2>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">Data stored locally</span>
-          <span className="text-slate-700 font-medium">{fmtBytesFormatter(usage)}</span>
-        </div>
-        <div className="w-full bg-brand-50 rounded-full h-1.5">
-          <div
-            className="bg-brand-500 h-1.5 rounded-full"
-            style={{ width: `${Math.min(100, (usage / (5 * 1024 * 1024)) * 100)}%` }}
-          />
-        </div>
-        <p className="text-xs text-slate-400">
-          {activities.length} activities · ~5 MB limit
-        </p>
+        {(() => {
+          const pct = (usage / (5 * 1024 * 1024)) * 100;
+          const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-brand-500';
+          const textColor = pct > 90 ? 'text-red-500' : pct > 70 ? 'text-amber-500' : 'text-slate-700';
+          return (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">Data stored locally</span>
+                <span className={`font-medium ${textColor}`}>{fmtBytesFormatter(usage)} / 5 MB</span>
+              </div>
+              <div className="w-full bg-brand-50 rounded-full h-1.5">
+                <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
+              </div>
+              {pct > 70 && (
+                <p className={`text-xs ${pct > 90 ? 'text-red-400' : 'text-amber-500'}`}>
+                  {pct > 90
+                    ? 'Storage almost full — delete old activities to free up space.'
+                    : 'Storage getting full — consider clearing old GPS tracks.'}
+                </p>
+              )}
+              <p className="text-xs text-slate-400">
+                {activities.length} {activities.length === 1 ? 'activity' : 'activities'} · GPS tracks use the most space
+              </p>
+            </>
+          );
+        })()}
       </div>
 
       {/* Danger zone */}

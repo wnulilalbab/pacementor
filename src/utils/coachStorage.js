@@ -15,7 +15,25 @@ export function getCoachingPlan() {
 }
 
 export function saveCoachingPlan(plan) {
-  localStorage.setItem(KEYS.PLAN, JSON.stringify(plan));
+  if (plan === null) {
+    localStorage.removeItem(KEYS.PLAN);
+    return;
+  }
+  try {
+    localStorage.setItem(KEYS.PLAN, JSON.stringify(plan));
+  } catch (e) {
+    // Quota exceeded — strip AI analyses (largest part) and retry
+    const slim = {
+      ...plan,
+      sessions: plan.sessions?.map((s) => ({ ...s, aiAnalysis: null })) ?? [],
+    };
+    try {
+      localStorage.setItem(KEYS.PLAN, JSON.stringify(slim));
+      console.warn('Storage quota near limit — AI analyses were dropped from plan to save space.');
+    } catch {
+      throw new Error('Storage full. Free up space by removing old activities in Settings.');
+    }
+  }
 }
 
 export function clearCoachingPlan() {
