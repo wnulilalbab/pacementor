@@ -372,7 +372,7 @@ function QuestionsStep({ goal, benchmarkIds, questions, setQuestions, answers, s
     setLoading(true);
     setError('');
     try {
-      const qs = await generateFollowUpQuestions(apiKey, goal, benchmarkIds, !!settings.testingMode);
+      const qs = await generateFollowUpQuestions(apiKey, goal, benchmarkIds, !!settings.testingMode, settings.aiModel || 'opus');
       setQuestions(qs);
       setAnswers(Object.fromEntries(qs.map((q) => [q.id, ''])));
     } catch (e) {
@@ -512,7 +512,8 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
         qas,
         settings,
         startDate,
-        !!settings.testingMode
+        !!settings.testingMode,
+        settings.aiModel || 'opus'
       );
       if (plan._generation) setGenerationInfo(plan._generation);
       onGenerated(plan);
@@ -553,7 +554,9 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
               ? 'bg-amber-50 border-amber-200 text-amber-600'
               : 'bg-slate-50 border-slate-100 text-slate-400'
           }`}>
-            {generationInfo.testMode && <span className="font-semibold">Test mode · </span>}
+            <span className="font-medium">{generationInfo.modelLabel}</span>
+            {generationInfo.testMode && <span> · test mode</span>}
+            {' · '}
             {generationInfo.inputTokens.toLocaleString()} in · {generationInfo.outputTokens.toLocaleString()} out
             {' · '}
             <span className="font-medium">~${generationInfo.estimatedCostUSD.toFixed(4)}</span>

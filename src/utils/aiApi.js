@@ -2,24 +2,24 @@ import { fmtPace, fmtDistance, fmtDuration } from './formatters';
 import { getActivity } from './storage';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL_FULL = 'claude-opus-4-6';
-const MODEL_TEST = 'claude-haiku-4-5-20251001'; // cheap model for testing
 
-// Pricing per million tokens
-const PRICING = {
-  [MODEL_FULL]: { input: 15,   output: 75  }, // $15/$75 per MTok
-  [MODEL_TEST]: { input: 0.80, output: 4   }, // $0.80/$4 per MTok
+// ── Model registry ────────────────────────────────────────────────────────────
+export const MODELS = {
+  opus:   { id: 'claude-opus-4-6',           label: 'Opus 4.6',   inputPricePerM: 15,   outputPricePerM: 75  },
+  sonnet: { id: 'claude-sonnet-4-6',          label: 'Sonnet 4.6', inputPricePerM: 3,    outputPricePerM: 15  },
+  haiku:  { id: 'claude-haiku-4-5-20251001',  label: 'Haiku 4.5',  inputPricePerM: 0.80, outputPricePerM: 4   },
 };
 
-export function estimateCost(inputTokens, outputTokens, testMode = false) {
-  const p = PRICING[testMode ? MODEL_TEST : MODEL_FULL];
+export function estimateCost(inputTokens, outputTokens, modelKey = 'opus') {
+  const p = MODELS[modelKey] ?? MODELS.opus;
   return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
 }
 
 // ── Core API call ─────────────────────────────────────────────────────────────
-// Returns { text, inputTokens, outputTokens }
-async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192, testMode = false) {
-  const model = testMode ? MODEL_TEST : MODEL_FULL;
+// Returns { text, inputTokens, outputTokens, modelKey }
+async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192, modelKey = 'opus') {
+  const modelDef = MODELS[modelKey] ?? MODELS.opus;
+
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -29,7 +29,7 @@ async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192, t
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model,
+      model: modelDef.id,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
@@ -58,19 +58,30 @@ async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192, t
     throw err;
   }
 
-  return { text, inputTokens, outputTokens, testMode };
+  return { text, inputTokens, outputTokens, modelKey };
 }
 
-// ── Parse JSON robustly (handles markdown code fences) ─────────────────────
+// ── Parse JSON robustly ───────────────────────────────────────────────────────
+// Tries multiple strategies to extract valid JSON regardless of model quirks.
 function parseJSON(text) {
-  const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    const err = new Error(`Failed to parse AI response: ${e.message}`);
-    err.rawResponse = text;
-    throw err;
+  const strategies = [
+    // 1. Direct parse
+    () => JSON.parse(text.trim()),
+    // 2. Strip markdown fences
+    () => JSON.parse(text.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/im, '').trim()),
+    // 3. Extract first {...} block
+    () => { const m = text.match(/(\{[\s\S]*\})/); if (m) return JSON.parse(m[1]); throw new Error('no match'); },
+    // 4. Extract first [...] block
+    () => { const m = text.match(/(\[[\s\S]*\])/); if (m) return JSON.parse(m[1]); throw new Error('no match'); },
+  ];
+
+  for (const strategy of strategies) {
+    try { return strategy(); } catch { /* try next */ }
   }
+
+  const err = new Error('Failed to parse AI response as JSON. The model may have returned unexpected text.');
+  err.rawResponse = text;
+  throw err;
 }
 
 // ── Benchmark summary for prompts ─────────────────────────────────────────────
@@ -96,7 +107,7 @@ export function summariseBenchmarks(activityIds) {
     ? Math.round(activities.filter((a) => a.avgHR).reduce((s, a) => s + a.avgHR, 0) / activities.filter((a) => a.avgHR).length)
     : null;
 
-  const lines = [
+  return [
     `Benchmark runs: ${activities.length} run(s) analysed`,
     `Total distance covered: ${fmtDistance(totalDist)}`,
     `Longest run: ${fmtDistance(maxDist)}`,
@@ -104,48 +115,41 @@ export function summariseBenchmarks(activityIds) {
     effortPace ? `Estimated effort/threshold pace: ${fmtPace(effortPace)}` : '',
     avgHR ? `Average HR across benchmarks: ${avgHR} bpm` : '',
     `Recent weekly volume estimate: ~${avgWeeklyDist} km`,
-  ].filter(Boolean);
-
-  return lines.join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 // ── Generate follow-up questions ──────────────────────────────────────────────
-export async function generateFollowUpQuestions(apiKey, goal, benchmarkIds, testMode = false) {
+export async function generateFollowUpQuestions(apiKey, goal, benchmarkIds, testMode = false, modelKey = 'opus') {
   const benchmarkSummary = summariseBenchmarks(benchmarkIds);
   const goalDesc = formatGoalForPrompt(goal);
-
-  const countInstruction = testMode
-    ? 'Generate exactly 3 short questions.'
-    : 'Generate 6-8 targeted follow-up questions.';
 
   const userContent = `Goal: ${goalDesc}
 
 Benchmark data:
 ${benchmarkSummary}
 
-${countInstruction} to personalise a running coaching plan for this athlete.
-Focus on: training availability, current fitness context, lifestyle constraints.
+Generate ${testMode ? 'exactly 3' : '6-8 targeted'} follow-up questions to personalise a running coaching plan.
+Focus on: training availability, fitness context, lifestyle constraints${testMode ? '.' : ', injury history, motivation.'}
 
-Respond ONLY with a JSON array in this exact format:
+You MUST respond with ONLY a valid JSON array — no text before or after, no markdown.
+Schema:
 [
-  {"id": "q1", "question": "How many days per week can you train?", "type": "number", "min": 1, "max": 7},
-  {"id": "q2", "question": "Which days are you typically available?", "type": "multiselect", "options": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]},
-  {"id": "q3", "question": "How would you describe your running experience?", "type": "select", "options": ["Beginner (< 1 year)", "Intermediate (1–3 years)", "Experienced (3+ years)"]}
+  {"id": "q1", "question": "...", "type": "number", "min": 1, "max": 7},
+  {"id": "q2", "question": "...", "type": "multiselect", "options": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]},
+  {"id": "q3", "question": "...", "type": "select", "options": ["Beginner (< 1 year)", "Intermediate (1–3 years)", "Experienced (3+ years)"]}
 ]
-Allowed types: "number", "text", "select", "multiselect"`;
+Allowed types: "number" (include min/max), "text", "select" (include options), "multiselect" (include options)`;
 
   const { text } = await callClaude(
-    apiKey,
-    userContent,
-    'You are an expert running coach. Respond only with valid JSON.',
-    testMode ? 600 : 8192,
-    testMode
+    apiKey, userContent,
+    'You are an expert running coach. Respond ONLY with a valid JSON array. No markdown, no explanation, no text outside the JSON.',
+    testMode ? 600 : 8192, modelKey
   );
   return parseJSON(text);
 }
 
 // ── Generate full coaching plan ───────────────────────────────────────────────
-export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQAs, userProfile, startDate, testMode = false) {
+export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQAs, userProfile, startDate, testMode = false, modelKey = 'opus') {
   const benchmarkSummary = summariseBenchmarks(benchmarkIds);
   const goalDesc = formatGoalForPrompt(goal);
   const hasDeadline = !!goal.deadline;
@@ -153,9 +157,7 @@ export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQ
     ? new Date(goal.deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : null;
 
-  const age = userProfile.birthYear
-    ? new Date().getFullYear() - Number(userProfile.birthYear)
-    : null;
+  const age = userProfile.birthYear ? new Date().getFullYear() - Number(userProfile.birthYear) : null;
 
   const profileLines = [
     age ? `Age: ${age}` : '',
@@ -166,100 +168,80 @@ export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQ
 
   const qaLines = followUpQAs.map((q) => `- ${q.question}: ${q.answer}`).join('\n');
 
-  const schema = `{
-  "currentConditionSummary": "2-3 sentence assessment of athlete's current fitness",
-  "approachSummary": "2-3 sentence explanation of the training approach to reach the goal",${!hasDeadline ? `
-  "suggestedDeadline": "YYYY-MM-DD (the end date of the plan you have chosen)",` : ''}
+  const deadlineInstruction = hasDeadline
+    ? `Deadline: ${deadline}`
+    : `Deadline: Not specified — choose an appropriate timeline (8–20 weeks) based on goal difficulty and athlete fitness. Include "suggestedDeadline" (YYYY-MM-DD) in your JSON response.`;
+
+  const scope = testMode
+    ? 'Generate ONLY 7 days of sessions (one test week). Keep all descriptions to one sentence maximum. Include 1 milestone only.'
+    : 'Generate a complete plan from start date to the deadline. Include at least one milestone every 3–4 weeks.';
+
+  const userContent = `Goal: ${goalDesc}
+${deadlineInstruction}
+Plan start date: ${startDate}
+Athlete profile: ${profileLines}
+
+Benchmark data:
+${benchmarkSummary}
+
+Training preferences:
+${qaLines}
+
+${scope}
+
+Rules (ALL models must follow exactly):
+- Sessions must have exact dates in YYYY-MM-DD format
+- pace values are seconds per km (e.g. 420 = 7:00/km), distance in meters
+- type must be one of: zone2, easy, tempo, interval, long_run, rest, race_sim
+- Include rest days as type "rest"
+- Respect athlete's available days and weekly frequency from their answers
+- Progress volume gradually (max 10% per week)
+
+You MUST respond with ONLY a valid JSON object matching this exact schema — no text before or after, no markdown:
+{
+  "currentConditionSummary": "string",
+  "approachSummary": "string",${!hasDeadline ? `
+  "suggestedDeadline": "YYYY-MM-DD",` : ''}
   "sessions": [
     {
       "id": "s1",
       "date": "YYYY-MM-DD",
       "week": 1,
       "type": "zone2|easy|tempo|interval|long_run|rest|race_sim",
-      "title": "Short title",
-      "description": "What to do and why",
-      "targets": {
-        "distance": 5000,
-        "paceMin": 390,
-        "paceMax": 420,
-        "zone": 2,
-        "duration": null
-      }
+      "title": "string",
+      "description": "string",
+      "targets": { "distance": 5000, "paceMin": 390, "paceMax": 420, "zone": 2, "duration": null }
     }
   ],
   "milestones": [
-    {
-      "id": "m1",
-      "week": 4,
-      "date": "YYYY-MM-DD",
-      "title": "First milestone title",
-      "description": "What to assess at this point"
-    }
+    { "id": "m1", "week": 4, "date": "YYYY-MM-DD", "title": "string", "description": "string" }
   ]
 }`;
 
-  const deadlineInstruction = hasDeadline
-    ? `Deadline: ${deadline}`
-    : `Deadline: Not specified — choose an appropriate timeline (8–20 weeks) based on the goal difficulty and the athlete's current fitness. Return your chosen end date as "suggestedDeadline" (YYYY-MM-DD) in the JSON.`;
-
-  const testModeNote = testMode
-    ? '\n⚠️ TEST MODE: Generate only 7 days of sessions (one week) starting from the start date. Keep descriptions very short (one sentence). Include 1 milestone only.'
-    : '';
-
-  const userContent = `Goal: ${goalDesc}
-${deadlineInstruction}
-Plan start date: ${startDate}
-
-Athlete profile: ${profileLines}
-
-Benchmark data:
-${benchmarkSummary}
-
-Training preferences from athlete:
-${qaLines}
-${testModeNote}
-Generate a ${testMode ? '7-day test' : 'complete personalised running'} coaching plan from ${startDate}.
-Rules:
-- Include ONLY running sessions and rest days
-- Sessions must have exact dates in YYYY-MM-DD format
-- pace values are seconds per km (e.g. 420 = 7:00/km), distance in meters
-- Include rest days as type "rest" with minimal targets${!testMode ? `
-- Respect the athlete's available days and frequency from their answers
-- Progress volume and intensity gradually (no more than 10% increase per week)
-- Include at least one milestone every 3-4 weeks` : ''}
-
-Respond ONLY with valid JSON matching this schema:
-${schema}`;
-
-  // Plan generation can be large (many sessions) — use higher token limit for full plans
   const { text, inputTokens, outputTokens } = await callClaude(
-    apiKey,
-    userContent,
-    'You are an expert running coach. Respond only with valid JSON. Do not include any explanation outside the JSON.',
-    testMode ? 2000 : 32000,
-    testMode
+    apiKey, userContent,
+    'You are an expert running coach. Respond ONLY with a valid JSON object. No markdown, no explanation, no text outside the JSON.',
+    testMode ? 2000 : 32000, modelKey
   );
 
   const parsed = parseJSON(text);
 
-  // Validate and add missing fields
-  parsed.id = `plan-${Date.now()}`;
-  parsed.createdAt = new Date().toISOString();
-  parsed.startDate = startDate;
-  parsed.status = 'active';
+  parsed.id             = `plan-${Date.now()}`;
+  parsed.createdAt      = new Date().toISOString();
+  parsed.startDate      = startDate;
+  parsed.status         = 'active';
   parsed.lastStravaSync = null;
   parsed.adjustmentHistory = [];
   parsed.followUpQuestions = followUpQAs;
-
-  // Attach token usage so UI can display cost
   parsed._generation = {
     inputTokens,
     outputTokens,
+    modelKey,
+    modelLabel: MODELS[modelKey]?.label ?? modelKey,
     testMode,
-    estimatedCostUSD: estimateCost(inputTokens, outputTokens, testMode),
+    estimatedCostUSD: estimateCost(inputTokens, outputTokens, modelKey),
   };
 
-  // Ensure session IDs and analysisStatus
   parsed.sessions = (parsed.sessions || []).map((s, i) => ({
     ...s,
     id: s.id || `s${i + 1}`,
@@ -278,94 +260,72 @@ ${schema}`;
 }
 
 // ── Analyse a completed run ───────────────────────────────────────────────────
-export async function analyzeRunResult(apiKey, session, activity, goal, testMode = false) {
+export async function analyzeRunResult(apiKey, session, activity, goal, testMode = false, modelKey = 'opus') {
   const goalDesc = formatGoalForPrompt(goal);
   const targetPaceRange = session.targets.paceMin && session.targets.paceMax
     ? `${fmtPace(session.targets.paceMin)} – ${fmtPace(session.targets.paceMax)}`
     : session.targets.paceMax ? `slower than ${fmtPace(session.targets.paceMax)}` : 'no pace target';
-
   const hrZoneDesc = activity.hrZones
     ? `Z1:${activity.hrZones[0]}% Z2:${activity.hrZones[1]}% Z3:${activity.hrZones[2]}% Z4:${activity.hrZones[3]}% Z5:${activity.hrZones[4] || 0}%`
     : 'HR data not available';
 
+  const depthInstruction = testMode
+    ? 'Write exactly 1 short sentence of feedback.'
+    : `Write 2-3 paragraphs covering: (1) adherence to plan, (2) what went well / needs work, (3) impact on goal progress. Be specific and encouraging.`;
+
   const userContent = `Planned session: "${session.title}" (${session.type})
 Targets: ${fmtDistance(session.targets.distance)} · Zone ${session.targets.zone || 'any'} · Pace ${targetPaceRange}
-
-Actual: ${fmtDistance(activity.distance)}, pace ${fmtPace(activity.avgPace)}, HR ${activity.avgHR ?? 'N/A'} bpm, zones ${hrZoneDesc}
-
+Actual: distance ${fmtDistance(activity.distance)}, pace ${fmtPace(activity.avgPace)}, avg HR ${activity.avgHR ?? 'N/A'} bpm
+HR zones: ${hrZoneDesc}
 Goal: ${goalDesc}
 
-${testMode
-  ? 'Write 1 short sentence of feedback. This is a test.'
-  : `Provide a focused 2-3 paragraph coaching analysis:
-1. How well did this session adhere to the plan?
-2. What went well and what needs attention?
-3. How does this impact progress toward the goal?
-Be specific, data-driven, and encouraging.`}`;
+${depthInstruction}`;
 
   const { text } = await callClaude(
-    apiKey,
-    userContent,
-    'You are an expert running coach providing post-run analysis.',
-    testMode ? 200 : 8192,
-    testMode
+    apiKey, userContent,
+    'You are an expert running coach providing post-run analysis. Be specific, encouraging, and actionable.',
+    testMode ? 200 : 8192, modelKey
   );
   return text;
 }
 
 // ── Adjust plan going forward ─────────────────────────────────────────────────
-export async function adjustPlan(apiKey, plan, today, testMode = false) {
+export async function adjustPlan(apiKey, plan, today, testMode = false, modelKey = 'opus') {
   const goal = plan.goalSnapshot;
   const goalDesc = formatGoalForPrompt(goal);
-  const deadline = goal.deadline
+  const deadline = goal?.deadline
     ? new Date(goal.deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'No fixed deadline';
 
-  const completedSessions = plan.sessions.filter(
-    (s) => s.resultActivityId && new Date(s.date) < new Date(today)
-  );
-  const missedSessions = plan.sessions.filter(
-    (s) => !s.resultActivityId && s.type !== 'rest' && new Date(s.date) < new Date(today)
-  );
+  const completedSessions = plan.sessions.filter((s) => s.resultActivityId && new Date(s.date) < new Date(today));
+  const missedSessions    = plan.sessions.filter((s) => !s.resultActivityId && s.type !== 'rest' && new Date(s.date) < new Date(today));
 
-  const completedSummary = completedSessions.length
-    ? completedSessions.map((s) => `${s.date}: ${s.title} (${s.type})`).join('\n')
-    : 'None completed yet';
-
-  const missedSummary = missedSessions.length
-    ? missedSessions.map((s) => `${s.date}: ${s.title} (${s.type})`).join('\n')
-    : 'None missed';
+  const scope = testMode
+    ? 'Generate ONLY 7 revised sessions. Keep descriptions to one sentence.'
+    : 'Generate a revised plan from today to the deadline.';
 
   const userContent = `Goal: ${goalDesc}
 Deadline: ${deadline}
 Plan created: ${plan.createdAt?.slice(0, 10)}
 Today: ${today}
 
-Completed sessions:
-${completedSummary}
+Completed: ${completedSessions.length ? completedSessions.map((s) => `${s.date}: ${s.title}`).join(', ') : 'none'}
+Missed: ${missedSessions.length ? missedSessions.map((s) => `${s.date}: ${s.title}`).join(', ') : 'none'}
 
-Missed/skipped sessions:
-${missedSummary}
+${scope}
+Adjust intensity based on actual progress. Don't try to make up all missed sessions at once.
 
-The athlete needs a revised training plan from ${today} to the deadline.
-Adjust intensity and volume based on actual progress.
-If behind, be realistic — don't try to make up all missed sessions at once.
-
-Respond ONLY with valid JSON:
+You MUST respond with ONLY a valid JSON object — no text before or after, no markdown:
 {
-  "adjustmentNote": "1-2 sentence explanation of the adjustment rationale",
-  "sessions": [ ...same session schema as original plan... ],
-  "milestones": [ ...same milestone schema... ]
+  "adjustmentNote": "string",
+  "sessions": [{ "id": "string", "date": "YYYY-MM-DD", "week": 1, "type": "zone2|easy|tempo|interval|long_run|rest|race_sim", "title": "string", "description": "string", "targets": { "distance": 5000, "paceMin": 390, "paceMax": 420, "zone": 2, "duration": null } }],
+  "milestones": [{ "id": "string", "week": 1, "date": "YYYY-MM-DD", "title": "string", "description": "string" }]
 }`;
 
-  const testModeNote = testMode ? '\n⚠️ TEST MODE: Generate only 7 days of revised sessions. Keep descriptions very short.' : '';
-
   const { text } = await callClaude(
-    apiKey,
-    userContent + testModeNote,
-    'You are an expert running coach adjusting a training plan. Respond only with valid JSON.',
-    testMode ? 1500 : 32000,
-    testMode
+    apiKey, userContent,
+    'You are an expert running coach adjusting a training plan. Respond ONLY with a valid JSON object. No markdown, no explanation.',
+    testMode ? 1500 : 32000, modelKey
   );
   return parseJSON(text);
 }

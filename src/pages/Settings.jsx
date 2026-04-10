@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle, Eye, EyeOff, Bot, Download, Upload } from 'lucide-react';
+import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle, Eye, EyeOff, Bot, Download, Upload, FlaskConical } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getStorageUsage, exportAllData, importAllData } from '../utils/storage';
 import { fmtBytes as fmtBytesFormatter } from '../utils/formatters';
+import { MODELS } from '../utils/aiApi';
 import { getStoredToken, clearToken, getStravaAuthUrl } from '../utils/stravaAuth';
 import { fetchAllActivities, fetchAthlete } from '../utils/stravaApi';
 
@@ -131,6 +132,8 @@ export default function Settings() {
           <Bot size={18} className="text-brand-500" />
           <h2 className="text-sm font-semibold text-slate-700">AI Coaching (Claude)</h2>
         </div>
+
+        {/* API key */}
         <Field
           label="Anthropic API Key"
           hint={<>Get your key at <span className="text-brand-500">console.anthropic.com</span></>}
@@ -158,22 +161,61 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Model selector */}
+        <div>
+          <label className="text-xs font-medium text-slate-500 block mb-2">Model</label>
+          <div className="space-y-2">
+            {Object.entries(MODELS).map(([key, m]) => {
+              const selected = (form.aiModel || 'opus') === key;
+              const costHint = {
+                opus:   '$15 / $75 per MTok · Best quality',
+                sonnet: '$3 / $15 per MTok · Balanced',
+                haiku:  '$0.80 / $4 per MTok · Fastest & cheapest',
+              }[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, aiModel: key }))}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-left transition-all ${
+                    selected
+                      ? 'border-brand-400 bg-brand-50'
+                      : 'border-slate-200 hover:border-brand-200'
+                  }`}
+                >
+                  <div>
+                    <span className={`text-sm font-medium ${selected ? 'text-brand-700' : 'text-slate-700'}`}>
+                      {m.label}
+                    </span>
+                    <p className="text-xs text-slate-400 mt-0.5">{costHint}</p>
+                  </div>
+                  {selected && <CheckCircle size={15} className="text-brand-500 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5">Input price / Output price per million tokens</p>
+        </div>
+
         {/* Testing mode toggle */}
         <div className={`flex items-center justify-between rounded-xl border px-3 py-3 transition-all ${
           form.testingMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
         }`}>
-          <div>
-            <p className={`text-sm font-medium ${form.testingMode ? 'text-amber-700' : 'text-slate-700'}`}>
-              Testing Mode
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Uses Claude Haiku + minimal output — ~50× cheaper for testing functionality
-            </p>
+          <div className="flex items-center gap-2">
+            <FlaskConical size={14} className={form.testingMode ? 'text-amber-500' : 'text-slate-400'} />
+            <div>
+              <p className={`text-sm font-medium ${form.testingMode ? 'text-amber-700' : 'text-slate-700'}`}>
+                Testing Mode
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                7-day plans, 3 questions, 1-sentence analyses — minimal token use
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setForm((f) => ({ ...f, testingMode: !f.testingMode }))}
-            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ml-3 ${
               form.testingMode ? 'bg-amber-400' : 'bg-slate-200'
             }`}
           >
@@ -182,11 +224,6 @@ export default function Settings() {
             }`} />
           </button>
         </div>
-        {form.testingMode && (
-          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            <AlertTriangle size={13} /> Testing mode on — plans limited to 7 days, short responses, cheap model
-          </div>
-        )}
       </div>
 
       {/* Strava */}
