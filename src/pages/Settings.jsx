@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle, Eye, EyeOff, Bot } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle, Eye, EyeOff, Bot, Download, Upload } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { getStorageUsage } from '../utils/storage';
+import { getStorageUsage, exportAllData, importAllData } from '../utils/storage';
 import { fmtBytes as fmtBytesFormatter } from '../utils/formatters';
 import { getStoredToken, clearToken, getStravaAuthUrl } from '../utils/stravaAuth';
 import { fetchAllActivities, fetchAthlete } from '../utils/stravaApi';
@@ -27,6 +27,9 @@ export default function Settings() {
   const [syncCount, setSyncCount] = useState(0);
   const [syncDone, setSyncDone] = useState(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [importStatus, setImportStatus] = useState(null); // null | 'ok' | 'error'
+  const [importMsg, setImportMsg] = useState('');
+  const importRef = useRef();
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -97,6 +100,18 @@ export default function Settings() {
       alert(`Sync failed: ${err.message}`);
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleImport(file) {
+    try {
+      const count = await importAllData(file);
+      setImportStatus('ok');
+      setImportMsg(`Imported ${count} data entries. Reloading…`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      setImportStatus('error');
+      setImportMsg(e.message);
     }
   }
 
@@ -348,6 +363,48 @@ export default function Settings() {
             </>
           );
         })()}
+      </div>
+
+      {/* Export / Import */}
+      <div className="card p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Backup & Restore</h2>
+        <p className="text-xs text-slate-400">
+          Export saves everything — activities, GPS tracks, coaching plan, settings — as a single JSON file.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={exportAllData}
+            className="flex-1 flex items-center justify-center gap-2 border border-brand-200 text-brand-600 hover:bg-brand-50 py-2.5 rounded-xl text-sm font-medium transition-all"
+          >
+            <Download size={14} /> Export All Data
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 py-2.5 rounded-xl text-sm font-medium transition-all"
+          >
+            <Upload size={14} /> Import Backup
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => { if (e.target.files[0]) handleImport(e.target.files[0]); e.target.value = ''; }}
+          />
+        </div>
+        {importStatus && (
+          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border ${
+            importStatus === 'ok'
+              ? 'bg-accent-50 border-accent-200 text-accent-600'
+              : 'bg-red-50 border-red-100 text-red-500'
+          }`}>
+            {importStatus === 'ok' ? <CheckCircle size={13} /> : <XCircle size={13} />}
+            {importMsg}
+          </div>
+        )}
+        <p className="text-xs text-slate-300">
+          Import will overwrite existing data and reload the page.
+        </p>
       </div>
 
       {/* Danger zone */}

@@ -4,7 +4,16 @@ import { getActivity } from './storage';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-opus-4-6';
 
+// Pricing per million tokens (claude-opus-4-6)
+const PRICE_INPUT_PER_M  = 15;   // $15 / 1M input tokens
+const PRICE_OUTPUT_PER_M = 75;   // $75 / 1M output tokens
+
+export function estimateCost(inputTokens, outputTokens) {
+  return (inputTokens * PRICE_INPUT_PER_M + outputTokens * PRICE_OUTPUT_PER_M) / 1_000_000;
+}
+
 // ── Core API call ─────────────────────────────────────────────────────────────
+// Returns { text, inputTokens, outputTokens }
 async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192) {
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
@@ -35,15 +44,16 @@ async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192) {
 
   const data = await res.json();
   const text = data.content[0].text;
+  const inputTokens  = data.usage?.input_tokens  ?? 0;
+  const outputTokens = data.usage?.output_tokens ?? 0;
 
-  // Warn if the response was cut off due to token limit
   if (data.stop_reason === 'max_tokens') {
     const err = new Error('AI response was cut off (token limit reached). Try a shorter deadline/plan or contact support.');
     err.rawResponse = text;
     throw err;
   }
 
-  return text;
+  return { text, inputTokens, outputTokens };
 }
 
 // ── Parse JSON robustly (handles markdown code fences) ─────────────────────
@@ -116,7 +126,7 @@ Respond ONLY with a JSON array in this exact format:
 ]
 Allowed types: "number", "text", "select", "multiselect"`;
 
-  const text = await callClaude(
+  const { text } = await callClaude(
     apiKey,
     userContent,
     'You are an expert running coach. Respond only with valid JSON.'
@@ -208,7 +218,7 @@ Respond ONLY with valid JSON matching this schema:
 ${schema}`;
 
   // Plan generation can be large (many sessions) — use max output tokens
-  const text = await callClaude(
+  const { text, inputTokens, outputTokens } = await callClaude(
     apiKey,
     userContent,
     'You are an expert running coach. Respond only with valid JSON. Do not include any explanation outside the JSON.',
@@ -225,6 +235,13 @@ ${schema}`;
   parsed.lastStravaSync = null;
   parsed.adjustmentHistory = [];
   parsed.followUpQuestions = followUpQAs;
+
+  // Attach token usage so UI can display cost
+  parsed._generation = {
+    inputTokens,
+    outputTokens,
+    estimatedCostUSD: estimateCost(inputTokens, outputTokens),
+  };
 
   // Ensure session IDs and analysisStatus
   parsed.sessions = (parsed.sessions || []).map((s, i) => ({
@@ -277,11 +294,12 @@ Provide a focused 2-3 paragraph coaching analysis:
 
 Be specific, data-driven, and encouraging.`;
 
-  return callClaude(
+  const { text } = await callClaude(
     apiKey,
     userContent,
     'You are an expert running coach providing post-run analysis. Be specific, encouraging, and actionable.'
   );
+  return text;
 }
 
 // ── Adjust plan going forward ─────────────────────────────────────────────────
@@ -329,7 +347,7 @@ Respond ONLY with valid JSON:
   "milestones": [ ...same milestone schema... ]
 }`;
 
-  const text = await callClaude(
+  const { text } = await callClaude(
     apiKey,
     userContent,
     'You are an expert running coach adjusting a training plan. Respond only with valid JSON.'

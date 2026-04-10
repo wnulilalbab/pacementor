@@ -97,3 +97,48 @@ export function getStorageUsage() {
   }
   return total; // bytes
 }
+
+// ── Export / Import ───────────────────────────────────────────────────────────
+
+export function exportAllData() {
+  const data = {};
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('pacementor_')) {
+      data[key] = localStorage.getItem(key);
+    }
+  }
+  const json = JSON.stringify(data);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pacementor-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export function importAllData(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const keys = Object.keys(data).filter((k) => k.startsWith('pacementor_'));
+        if (keys.length === 0) {
+          reject(new Error('No PaceMentor data found in this file.'));
+          return;
+        }
+        for (const key of keys) {
+          localStorage.setItem(key, data[key]);
+        }
+        resolve(keys.length);
+      } catch {
+        reject(new Error('Invalid backup file — could not parse JSON.'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.readAsText(file);
+  });
+}

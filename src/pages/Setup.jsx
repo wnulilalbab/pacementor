@@ -489,6 +489,7 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
   const [error, setError] = useState('');
   const [rawResponse, setRawResponse] = useState('');
   const [showRaw, setShowRaw] = useState(false);
+  const [generationInfo, setGenerationInfo] = useState(null); // { inputTokens, outputTokens, estimatedCostUSD }
   const unit = settings.unit || 'metric';
 
   const qas = (questions || []).map((q) => ({ ...q, answer: answers?.[q.id] || '' }));
@@ -512,6 +513,7 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
         settings,
         startDate
       );
+      if (plan._generation) setGenerationInfo(plan._generation);
       onGenerated(plan);
       setStatus('done');
     } catch (e) {
@@ -544,6 +546,15 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
         <CheckCircle size={48} className="text-accent-500" />
         <p className="text-slate-800 font-semibold text-lg">Your plan is ready!</p>
         <p className="text-slate-400 text-sm">Redirecting to your coaching plan…</p>
+        {generationInfo && (
+          <div className="text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-center">
+            {generationInfo.inputTokens.toLocaleString()} in · {generationInfo.outputTokens.toLocaleString()} out
+            {' · '}
+            <span className="font-medium text-slate-500">
+              ~${generationInfo.estimatedCostUSD.toFixed(4)}
+            </span>
+          </div>
+        )}
       </div>
     );
   }
