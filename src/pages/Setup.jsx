@@ -322,7 +322,7 @@ function BenchmarkStep({ benchmarkIds, setBenchmarkIds, addActivity, settings })
                 onClick={() => toggleStrava(act)}
                 className={`w-full text-left rounded-2xl border-2 transition-all ${selected ? 'border-brand-400 bg-brand-50' : 'border-transparent'}`}
               >
-                <ActivityCard activity={act} unit={unit} />
+                <ActivityCard activity={act} unit={unit} noLink />
               </button>
             );
           })}

@@ -123,7 +123,7 @@ function AddRunModal({ onClose, settings, addActivity, onAdd }) {
               )}
               {stravaRuns?.map((act) => (
                 <button key={act.id} onClick={() => handleSelectStrava(act)} className="w-full text-left hover:opacity-80 transition-opacity">
-                  <ActivityCard activity={act} unit={unit} />
+                  <ActivityCard activity={act} unit={unit} noLink />
                 </button>
               ))}
             </div>

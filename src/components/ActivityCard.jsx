@@ -2,14 +2,12 @@ import { Link } from 'react-router-dom';
 import { Calendar, TrendingUp, Heart } from 'lucide-react';
 import { fmtDate, fmtDistance, fmtDuration, fmtPace, fmtElevation } from '../utils/formatters';
 
-export default function ActivityCard({ activity, unit = 'metric' }) {
+export default function ActivityCard({ activity, unit = 'metric', noLink = false }) {
   const { id, name, date, distance, movingTime, avgPace, elevationGain, avgHR, source } = activity;
+  const cls = "card p-4 hover:border-brand-300 hover:shadow-md transition-all block";
 
-  return (
-    <Link
-      to={`/activities/${id}`}
-      className="card p-4 hover:border-brand-300 hover:shadow-md transition-all block"
-    >
+  const inner = (
+    <>
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-semibold text-slate-800 text-sm line-clamp-1">{name}</h3>
@@ -50,8 +48,11 @@ export default function ActivityCard({ activity, unit = 'metric' }) {
           icon={avgHR ? <Heart size={10} className="text-red-400" /> : null}
         />
       </div>
-    </Link>
+    </>
   );
+
+  if (noLink) return <div className={cls}>{inner}</div>;
+  return <Link to={`/activities/${id}`} className={cls}>{inner}</Link>;
 }
 
 function Metric({ label, value, icon }) {
