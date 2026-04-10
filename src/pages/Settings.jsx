@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle } from 'lucide-react';
+import { Save, Trash2, AlertTriangle, RefreshCw, Link, Unlink, CheckCircle, XCircle, Eye, EyeOff, Bot } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getStorageUsage } from '../utils/storage';
 import { fmtBytes as fmtBytesFormatter } from '../utils/formatters';
@@ -26,6 +26,7 @@ export default function Settings() {
   const [syncing, setSyncing] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
   const [syncDone, setSyncDone] = useState(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -107,6 +108,40 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Settings</h1>
         <p className="text-slate-400 text-sm mt-1">Personalize your experience</p>
+      </div>
+
+      {/* AI */}
+      <div className="card p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Bot size={18} className="text-brand-500" />
+          <h2 className="text-sm font-semibold text-slate-700">AI Coaching (Claude)</h2>
+        </div>
+        <Field
+          label="Anthropic API Key"
+          hint={<>Get your key at <span className="text-brand-500">console.anthropic.com</span></>}
+        >
+          <div className="relative">
+            <input
+              type={showApiKey ? 'text' : 'password'}
+              value={form.anthropicApiKey || ''}
+              onChange={(e) => setForm((f) => ({ ...f, anthropicApiKey: e.target.value }))}
+              placeholder="sk-ant-..."
+              className="input-field pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKey((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+        </Field>
+        {form.anthropicApiKey && (
+          <div className="flex items-center gap-2 text-xs text-accent-600 bg-accent-50 border border-accent-200 rounded-xl px-3 py-2">
+            <CheckCircle size={13} /> API key saved — AI coaching features are enabled
+          </div>
+        )}
       </div>
 
       {/* Strava */}

@@ -167,8 +167,10 @@ export async function fetchAthlete() {
   return apiFetch('/athlete');
 }
 
-export async function fetchActivitiesPage(page = 1, perPage = 100) {
-  const data = await apiFetch(`/athlete/activities?per_page=${perPage}&page=${page}`);
+export async function fetchActivitiesPage(page = 1, perPage = 100, after = null) {
+  let url = `/athlete/activities?per_page=${perPage}&page=${page}`;
+  if (after) url += `&after=${Math.floor(new Date(after).getTime() / 1000)}`;
+  const data = await apiFetch(url);
   return data
     .filter(a => a.type === 'Run' || a.sport_type === 'Run')
     .map(toActivity);
@@ -184,6 +186,22 @@ export async function fetchAllActivities(existingIds = new Set(), onProgress) {
     const fresh = batch.filter(a => !existingIds.has(a.id));
     all.push(...fresh);
     onProgress?.(all.length, batch.length);
+    if (batch.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
+// Fetch activities since a given ISO date (for coaching plan sync)
+export async function fetchActivitiesSince(afterISO, existingIds = new Set(), onProgress) {
+  const all = [];
+  let page = 1;
+  while (true) {
+    const batch = await fetchActivitiesPage(page, 100, afterISO);
+    if (!batch.length) break;
+    const fresh = batch.filter(a => !existingIds.has(a.id));
+    all.push(...fresh);
+    onProgress?.(all.length);
     if (batch.length < 100) break;
     page++;
   }
