@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer } from 'react';
+import { createContext, useContext, useReducer } from 'react';
 import {
   getActivities,
   saveActivity as storageSave,
@@ -69,18 +69,14 @@ function reducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, {
-    activities: [],
+  // Load all state synchronously from localStorage so routing decisions
+  // (e.g. RootRedirect: plan? → /plan : /setup) are correct on first render.
+  const [state, dispatch] = useReducer(reducer, undefined, () => ({
+    activities: getActivities(),
     settings: getSettings(),
-    coachingPlan: null,
-    goal: null,
-  });
-
-  useEffect(() => {
-    dispatch({ type: 'SET_ACTIVITIES', payload: getActivities() });
-    dispatch({ type: 'SET_COACHING_PLAN', payload: getCoachingPlan() });
-    dispatch({ type: 'SET_GOAL', payload: getGoal() });
-  }, []);
+    coachingPlan: getCoachingPlan(),
+    goal: getGoal(),
+  }));
 
   function addActivity(activity) {
     const { trackPoints, ...summary } = activity;

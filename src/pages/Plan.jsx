@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Component } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Trophy, ChevronDown, ChevronUp, Upload, RefreshCw,
@@ -29,8 +29,8 @@ function sessionStyle(type) {
 
 // ── Goal banner ───────────────────────────────────────────────────────────────
 function GoalBanner({ plan }) {
-  const goal = plan.goalSnapshot;
-  const sessions = plan.sessions.filter((s) => s.type !== 'rest');
+  const goal = plan.goalSnapshot || {};
+  const sessions = (plan.sessions || []).filter((s) => s.type !== 'rest');
   const done = sessions.filter((s) => s.resultActivityId).length;
   const pct = sessions.length ? Math.round((done / sessions.length) * 100) : 0;
 
@@ -318,7 +318,7 @@ function AdjustPlanButton({ plan, settings, saveCoachingPlan }) {
   const [error, setError] = useState('');
   const apiKey = settings.anthropicApiKey;
 
-  const missedCount = plan.sessions.filter(
+  const missedCount = (plan.sessions || []).filter(
     (s) => s.type !== 'rest' && !s.resultActivityId &&
     new Date(s.date) < new Date()
   ).length;
@@ -334,7 +334,7 @@ function AdjustPlanButton({ plan, settings, saveCoachingPlan }) {
       const result = await aiAdjustPlan(apiKey, plan, today, !!settings.testingMode, settings.aiModel || 'opus');
 
       // Replace future sessions + milestones
-      const pastSessions = plan.sessions.filter((s) => new Date(s.date) < new Date(today));
+      const pastSessions = (plan.sessions || []).filter((s) => new Date(s.date) < new Date(today));
       const newSessions = (result.sessions || []).map((s, i) => ({
         ...s,
         id: s.id || `adj-${Date.now()}-${i}`,
@@ -381,8 +381,38 @@ function AdjustPlanButton({ plan, settings, saveCoachingPlan }) {
   );
 }
 
+// ── Error boundary ────────────────────────────────────────────────────────────
+class PlanErrorBoundary extends Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card p-6 text-center space-y-3 border-red-200 bg-red-50">
+        <AlertCircle size={32} className="text-red-400 mx-auto" />
+        <h2 className="font-semibold text-red-700">Couldn't render your plan</h2>
+        <p className="text-xs text-red-500 font-mono break-all">{this.state.error.message}</p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="text-xs px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50"
+          >
+            Try again
+          </button>
+          <button
+            onClick={() => { localStorage.removeItem('pacementor_coaching_plan'); window.location.reload(); }}
+            className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+          >
+            Clear plan &amp; restart
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 // ── Main Plan component ───────────────────────────────────────────────────────
-export default function Plan() {
+function PlanInner() {
   const navigate = useNavigate();
   const { coachingPlan, goal, settings, updateSession, saveCoachingPlan } = useApp();
   const [activeWeek, setActiveWeek] = useState(null);
@@ -515,5 +545,13 @@ export default function Plan() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function Plan() {
+  return (
+    <PlanErrorBoundary>
+      <PlanInner />
+    </PlanErrorBoundary>
   );
 }
