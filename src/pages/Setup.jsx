@@ -133,7 +133,9 @@ function GoalStep({ goal, setGoal }) {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1.5">Target date</label>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Target date <span className="text-slate-300">(optional — AI will choose if left blank)</span>
+            </label>
             <input
               type="date"
               min={minDate.toISOString().slice(0, 10)}
@@ -189,7 +191,9 @@ function GoalStep({ goal, setGoal }) {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1.5">Race / target date</label>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Race / target date <span className="text-slate-300">(optional — AI will plan timeline if left blank)</span>
+            </label>
             <input
               type="date"
               min={minDate.toISOString().slice(0, 10)}
@@ -556,7 +560,10 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
           <div>
             <div className="text-xs text-slate-400 font-medium">Goal</div>
             <div className="text-slate-800 font-semibold text-sm">{goalLabel}</div>
-            {goal.deadline && <div className="text-xs text-slate-400">By {fmtDate(goal.deadline)}</div>}
+            {goal.deadline
+              ? <div className="text-xs text-slate-400">By {fmtDate(goal.deadline)}</div>
+              : <div className="text-xs text-slate-400 italic">AI will choose the timeline</div>
+            }
           </div>
         </div>
         <div className="flex items-start gap-3">
@@ -638,15 +645,19 @@ export default function Setup() {
   }
 
   function canNext() {
-    if (step === 0) return !!(goal.type && goal.deadline && (goal.type === 'zone2_pace' ? goal.targetPace : goal.targetRace));
+    if (step === 0) return !!(goal.type && (goal.type === 'zone2_pace' ? goal.targetPace : goal.targetRace));
     if (step === 1) return benchmarkIds.length > 0;
     if (step === 2) return true; // questions optional
     return false;
   }
 
   function handleGenerated(plan) {
+    // If user didn't set a deadline, use the AI-suggested one
+    const finalGoal = goal.deadline
+      ? goal
+      : { ...goal, deadline: plan.suggestedDeadline || null };
     saveCoachingPlan(plan);
-    saveGoal(goal);
+    saveGoal(finalGoal);
     saveBenchmarkRunIds(benchmarkIds);
     setTimeout(() => navigate('/plan'), 1200);
   }

@@ -110,9 +110,10 @@ Allowed types: "number", "text", "select", "multiselect"`;
 export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQAs, userProfile, startDate) {
   const benchmarkSummary = summariseBenchmarks(benchmarkIds);
   const goalDesc = formatGoalForPrompt(goal);
-  const deadline = goal.deadline
+  const hasDeadline = !!goal.deadline;
+  const deadline = hasDeadline
     ? new Date(goal.deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-    : 'No fixed deadline';
+    : null;
 
   const age = userProfile.birthYear
     ? new Date().getFullYear() - Number(userProfile.birthYear)
@@ -129,7 +130,8 @@ export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQ
 
   const schema = `{
   "currentConditionSummary": "2-3 sentence assessment of athlete's current fitness",
-  "approachSummary": "2-3 sentence explanation of the training approach to reach the goal",
+  "approachSummary": "2-3 sentence explanation of the training approach to reach the goal",${!hasDeadline ? `
+  "suggestedDeadline": "YYYY-MM-DD (the end date of the plan you have chosen)",` : ''}
   "sessions": [
     {
       "id": "s1",
@@ -158,8 +160,12 @@ export async function generateCoachingPlan(apiKey, goal, benchmarkIds, followUpQ
   ]
 }`;
 
+  const deadlineInstruction = hasDeadline
+    ? `Deadline: ${deadline}`
+    : `Deadline: Not specified — choose an appropriate timeline (8–20 weeks) based on the goal difficulty and the athlete's current fitness. Return your chosen end date as "suggestedDeadline" (YYYY-MM-DD) in the JSON.`;
+
   const userContent = `Goal: ${goalDesc}
-Deadline: ${deadline}
+${deadlineInstruction}
 Plan start date: ${startDate}
 
 Athlete profile: ${profileLines}
