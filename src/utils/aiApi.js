@@ -5,7 +5,7 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-opus-4-6';
 
 // ── Core API call ─────────────────────────────────────────────────────────────
-async function callClaude(apiKey, userContent, systemPrompt) {
+async function callClaude(apiKey, userContent, systemPrompt, maxTokens = 8192) {
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -16,7 +16,7 @@ async function callClaude(apiKey, userContent, systemPrompt) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     }),
@@ -34,14 +34,28 @@ async function callClaude(apiKey, userContent, systemPrompt) {
   }
 
   const data = await res.json();
-  return data.content[0].text;
+  const text = data.content[0].text;
+
+  // Warn if the response was cut off due to token limit
+  if (data.stop_reason === 'max_tokens') {
+    const err = new Error('AI response was cut off (token limit reached). Try a shorter deadline/plan or contact support.');
+    err.rawResponse = text;
+    throw err;
+  }
+
+  return text;
 }
 
 // ── Parse JSON robustly (handles markdown code fences) ─────────────────────
 function parseJSON(text) {
-  // Strip markdown code fences if present
   const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    const err = new Error(`Failed to parse AI response: ${e.message}`);
+    err.rawResponse = text;
+    throw err;
+  }
 }
 
 // ── Benchmark summary for prompts ─────────────────────────────────────────────
@@ -193,10 +207,12 @@ Rules:
 Respond ONLY with valid JSON matching this schema:
 ${schema}`;
 
+  // Plan generation can be large (many sessions) — use max output tokens
   const text = await callClaude(
     apiKey,
     userContent,
-    'You are an expert running coach. Respond only with valid JSON. Do not include any explanation outside the JSON.'
+    'You are an expert running coach. Respond only with valid JSON. Do not include any explanation outside the JSON.',
+    32000
   );
 
   const parsed = parseJSON(text);

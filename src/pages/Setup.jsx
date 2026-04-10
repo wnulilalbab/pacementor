@@ -487,6 +487,8 @@ function QuestionsStep({ goal, benchmarkIds, questions, setQuestions, answers, s
 function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGenerated }) {
   const [status, setStatus] = useState('idle'); // idle | generating | done | error
   const [error, setError] = useState('');
+  const [rawResponse, setRawResponse] = useState('');
+  const [showRaw, setShowRaw] = useState(false);
   const unit = settings.unit || 'metric';
 
   const qas = (questions || []).map((q) => ({ ...q, answer: answers?.[q.id] || '' }));
@@ -495,6 +497,8 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
     if (!settings.anthropicApiKey) { setError('Add your Anthropic API key in Settings.'); return; }
     setStatus('generating');
     setError('');
+    setRawResponse('');
+    setShowRaw(false);
     try {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -512,6 +516,7 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
       setStatus('done');
     } catch (e) {
       setError(e.message);
+      setRawResponse(e.rawResponse || '');
       setStatus('error');
     }
   }
@@ -591,13 +596,41 @@ function GenerateStep({ goal, benchmarkIds, questions, answers, settings, onGene
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-          <AlertCircle size={15} /> {error}
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-red-500 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
+          </div>
+          {rawResponse && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
+                <span className="text-xs font-medium text-slate-500">Raw AI response</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(rawResponse)}
+                    className="text-xs text-brand-500 hover:text-brand-700 font-medium"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => setShowRaw((v) => !v)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    {showRaw ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+              {showRaw && (
+                <pre className="text-xs text-slate-600 p-3 overflow-auto max-h-48 whitespace-pre-wrap break-all">
+                  {rawResponse}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       <button onClick={handleGenerate} className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base">
-        <Target size={18} /> Generate My Coaching Plan
+        <Target size={18} /> {status === 'error' ? 'Try Again' : 'Generate My Coaching Plan'}
       </button>
     </div>
   );
