@@ -225,7 +225,7 @@ function BenchmarkStep({ benchmarkIds, setBenchmarkIds, addActivity, settings })
       // Last 14 days
       const after = new Date(Date.now() - 14 * 86400000).toISOString();
       const runs = await fetchActivitiesPage(1, 50, after);
-      setStravaRuns(runs);
+      setStravaRuns([...runs].sort((a, b) => new Date(b.date) - new Date(a.date)));
     } catch (err) {
       setStravaRuns([]);
     } finally {
