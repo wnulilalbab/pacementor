@@ -60,23 +60,36 @@ function SyncButton() {
     setSyncing(true);
     try {
       const existingIds = new Set(activities.map((a) => a.id));
-      const afterISO = lastSync ?? coachingPlan.startDate;
-      const fresh = await fetchActivitiesSince(afterISO, existingIds);
 
+      // Fetch 1 day before startDate to cover timezone edge-cases where a local
+      // "plan day 1" run ends up with a UTC timestamp from the day before.
+      const planStart = coachingPlan.startDate
+        ? new Date(new Date(coachingPlan.startDate).getTime() - 86400000).toISOString()
+        : coachingPlan.startDate;
+      const afterISO = lastSync ?? planStart;
+
+      const fresh = await fetchActivitiesSince(afterISO, existingIds);
       for (const act of fresh) addActivity(act);
 
-      // Auto-match activities to sessions by date (±1 day)
-      const updatedPlan = { ...coachingPlan };
+      // Auto-match: consider BOTH newly fetched AND pre-existing activities so
+      // that benchmark runs (already in context) also link to plan sessions.
+      const allActivities = [...activities, ...fresh];
       const ONE_DAY = 86400000;
-      for (const act of fresh) {
-        const actTime = new Date(act.date).getTime();
-        const match = updatedPlan.sessions.find(
-          (s) => !s.resultActivityId && s.type !== 'rest' &&
-            Math.abs(new Date(s.date).getTime() - actTime) <= ONE_DAY
+
+      const updatedSessions = coachingPlan.sessions.map((s) => {
+        if (s.resultActivityId || s.type === 'rest') return s;
+        const sessTime = new Date(s.date).getTime();
+        const match = allActivities.find(
+          (act) => Math.abs(new Date(act.date).getTime() - sessTime) <= ONE_DAY
         );
-        if (match) match.resultActivityId = act.id;
-      }
-      updatedPlan.lastStravaSync = new Date().toISOString();
+        return match ? { ...s, resultActivityId: match.id } : s;
+      });
+
+      const updatedPlan = {
+        ...coachingPlan,
+        sessions: updatedSessions,
+        lastStravaSync: new Date().toISOString(),
+      };
       saveCoachingPlan(updatedPlan);
     } catch (err) {
       alert(`Sync failed: ${err.message}`);

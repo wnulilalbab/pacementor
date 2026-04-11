@@ -75,6 +75,8 @@ function SessionCard({ session, goal, settings, updateSession }) {
   const [expanded, setExpanded] = useState(false);
   const [analysing, setAnalysing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const { activities, addActivity } = useApp();
   const fileRef = useRef();
   const unit = settings.unit || 'metric';
   const apiKey = settings.anthropicApiKey;
@@ -122,14 +124,29 @@ function SessionCard({ session, goal, settings, updateSession }) {
   async function handleUploadResult(file) {
     if (!file) return;
     try {
-      const { addActivity } = await import('../context/AppContext').then(m => m.useApp?.() || {});
-      // fallback: parse and link
-    } catch { }
+      const { parseGPX } = await import('../utils/gpxParser');
+      const activity = await parseGPX(file);
+      addActivity(activity);
+      updateSession(session.id, { resultActivityId: activity.id });
+    } catch (e) {
+      alert(`Failed to read GPX: ${e.message}`);
+    }
   }
 
   function handleSkip() {
     updateSession(session.id, { analysisStatus: 'skipped' });
   }
+
+  function handleLinkActivity(actId) {
+    updateSession(session.id, { resultActivityId: actId });
+    setShowLinkPicker(false);
+  }
+
+  // Activities sorted by date desc for the picker — filter to runs within 7 days of session
+  const sessTime = new Date(session.date).getTime();
+  const nearbyActivities = activities
+    .filter((a) => Math.abs(new Date(a.date).getTime() - sessTime) <= 7 * 86400000)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -234,20 +251,64 @@ function SessionCard({ session, goal, settings, updateSession }) {
                       <HRZonesChart hrZones={resultActivity.hrZones} />
                     </div>
                   )}
-                  <Link
-                    to={`/activities/${resultActivity.id}`}
-                    className="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1 mt-1"
-                  >
-                    <BarChart2 size={11} /> View full activity
-                  </Link>
+                  <div className="flex items-center gap-3 mt-1">
+                    <Link
+                      to={`/activities/${resultActivity.id}`}
+                      className="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1"
+                    >
+                      <BarChart2 size={11} /> View full activity
+                    </Link>
+                    <button
+                      onClick={() => updateSession(session.id, { resultActivityId: null, aiAnalysis: null, analysisStatus: null })}
+                      className="text-xs text-slate-400 hover:text-red-400 flex items-center gap-1"
+                    >
+                      Unlink
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-xs text-slate-400">No result linked yet.</p>
+
+                  {/* Manual link picker */}
+                  {showLinkPicker ? (
+                    <div className="border border-brand-200 rounded-xl overflow-hidden">
+                      <div className="bg-brand-50 px-3 py-2 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-brand-700">Pick an activity to link</span>
+                        <button onClick={() => setShowLinkPicker(false)} className="text-slate-400 hover:text-slate-600 text-xs">✕</button>
+                      </div>
+                      {nearbyActivities.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-3 py-2">No activities within 7 days of this session.</p>
+                      ) : (
+                        <div className="divide-y divide-brand-50 max-h-48 overflow-y-auto">
+                          {nearbyActivities.map((a) => (
+                            <button
+                              key={a.id}
+                              onClick={() => handleLinkActivity(a.id)}
+                              className="w-full text-left px-3 py-2 hover:bg-brand-50 transition-colors"
+                            >
+                              <div className="text-xs font-medium text-slate-700 truncate">{a.name}</div>
+                              <div className="text-xs text-slate-400">
+                                {fmtDate(a.date)} · {fmtDistance(a.distance, unit)} · {fmtPace(a.avgPace, unit)}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowLinkPicker(true)}
+                      className="flex items-center gap-1.5 text-xs text-brand-600 bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-lg hover:bg-brand-100 transition-all"
+                    >
+                      <CheckCircle size={12} /> Link activity manually
+                    </button>
+                  )}
+
                   {isPast && (
                     <>
                       <input ref={fileRef} type="file" accept=".gpx" className="hidden"
-                        onChange={(e) => { e.target.value = ''; }}
+                        onChange={(e) => { handleUploadResult(e.target.files?.[0]); e.target.value = ''; }}
                       />
                       <button
                         onClick={() => fileRef.current?.click()}
